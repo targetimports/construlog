@@ -1,0 +1,10 @@
+node_modules
+dist
+.git
+.env
+.env.*
+backend
+base44
+*.log
+docker-compose*.yml
+nginx
