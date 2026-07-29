@@ -10,7 +10,7 @@ import { limitePorIP } from './rateLimit.js';
 const router = Router();
 
 // Base pública para os links de aprovação enviados por e-mail (admin clica no e-mail).
-const APP_URL = (process.env.APP_PUBLIC_URL || 'https://grupogermanos.com.br').replace(/\/$/, '');
+const APP_URL = (process.env.APP_PUBLIC_URL || 'https://construlog.com.br').replace(/\/$/, '');
 const paginaHtml = (titulo, msg, cor, bg, icone) => `<!doctype html><html lang="pt-br"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${titulo}</title>
 <style>*{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#f4f4f5;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;color:#111827}
 .card{background:#fff;max-width:420px;width:100%;border:1px solid #ececee;border-radius:20px;padding:44px 34px;text-align:center;box-shadow:0 12px 40px rgba(17,24,39,.06)}
@@ -19,7 +19,7 @@ h1{margin:0 0 10px;font-size:22px;font-weight:700}
 p{margin:0;font-size:14px;line-height:1.6;color:#6b7280}
 .brand{margin-top:30px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#b8bcc2;font-weight:700}
 .bar{height:4px;background:${cor};border-radius:9999px;width:44px;margin:22px auto 0}</style></head>
-<body><div class="card"><div class="badge" style="background:${bg};color:${cor}">${icone}</div><h1 style="color:${cor}">${titulo}</h1><p>${msg}</p><div class="bar"></div><div class="brand">Germanos ConstruLog</div></div></body></html>`;
+<body><div class="card"><div class="badge" style="background:${bg};color:${cor}">${icone}</div><h1 style="color:${cor}">${titulo}</h1><p>${msg}</p><div class="bar"></div><div class="brand">Construlog ConstruLog</div></div></body></html>`;
 
 // Campos protegidos do usuário que não podem ser sobrescritos via updateMe.
 // (email tem tratamento próprio — troca controlada com validação de unicidade.)
@@ -72,6 +72,16 @@ router.get('/me', requireAuth, async (req, res, next) => {
   try {
     const { rows } = await query('SELECT * FROM auth_users WHERE id = $1', [req.user.id]);
     if (!rows[0]) return res.status(401).json({ error: 'auth_required' });
+
+    // Marca presença: é daqui que sai o "usuários online" mandado ao painel de
+    // licenciamento (licenca.js). Fica no /me e não no /login porque quem abriu
+    // o sistema hoje cedo e segue trabalhando não passa mais pelo login.
+    // Falha aqui não pode derrubar a resposta — presença é métrica, não regra.
+    query(
+      `UPDATE auth_users SET data = COALESCE(data, '{}'::jsonb) || jsonb_build_object('ultimo_acesso', $2::text) WHERE id = $1`,
+      [req.user.id, new Date().toISOString()],
+    ).catch(() => {});
+
     res.json(sanitizeUser(rows[0]));
   } catch (err) { next(err); }
 });
