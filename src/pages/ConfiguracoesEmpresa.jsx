@@ -236,7 +236,7 @@ export default function ConfiguracoesEmpresa() {
             <CardContent className="space-y-5">
               <div className="w-full">
                 <Label className="mb-1.5 block">Nome do Sistema</Label>
-                <Input className="h-11 w-full" value={formData.nome_sistema} onChange={(e) => setField('nome_sistema', e.target.value)} placeholder="Ex: Germanos Construlog" />
+                <Input className="h-11 w-full" value={formData.nome_sistema} onChange={(e) => setField('nome_sistema', e.target.value)} placeholder="Ex: Construlog Construlog" />
                 <p className="text-xs text-gray-500 mt-1">Exibido na sidebar, no título da aba e na tela de login.</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -26,7 +26,7 @@ function montarHtml(rel, obra) {
     <table style="width:100%;border-collapse:collapse;margin-top:12px">
       <tbody>${linhas.join('') || '<tr><td style="padding:8px">Nenhuma seção selecionada.</td></tr>'}</tbody>
     </table>
-    <p style="color:#9ca3af;font-size:12px;margin-top:24px">Relatório automático — GERMANOS CONSTRULOG</p>
+    <p style="color:#9ca3af;font-size:12px;margin-top:24px">Relatório automático — CONSTRULOG CONSTRULOG</p>
   </div>`;
 }
 

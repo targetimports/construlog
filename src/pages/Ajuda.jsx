@@ -14,7 +14,7 @@ import { Play, ChevronRight } from 'lucide-react';
 //
 // Os vídeos são servidos pelo próprio servidor em /videos/ (nginx, com range
 // request para arrastar a barra). Trocar um vídeo é substituir o arquivo em
-// /root/germanos/videos — não exige rebuild.
+// /root/construlog/videos — não exige rebuild.
 
 const AULAS = [
   {

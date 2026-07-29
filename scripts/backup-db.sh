@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# Backup do banco PostgreSQL do Germanos.
+# Backup do banco PostgreSQL do Construlog.
 #
 # - Ligado/desligado pela variável CRONTAB_ON no .env (true/false).
 # - Faz pg_dump comprimido em backups/ com rotação (mantém os últimos N).
@@ -8,11 +8,11 @@
 #   quando BACKUP_RCLONE_REMOTE estiver definido no .env.
 #
 # Agendado no crontab do host (o cron sempre dispara; quem decide rodar ou não
-# é o CRONTAB_ON). Ex.: 0 3 * * * /root/germanos/scripts/backup-db.sh >> ...
+# é o CRONTAB_ON). Ex.: 0 3 * * * /root/construlog/scripts/backup-db.sh >> ...
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
-APP_DIR="/root/germanos"
+APP_DIR="/root/construlog"
 cd "$APP_DIR"
 
 log() { echo "$(date '+%F %T') [backup] $*"; }
@@ -40,9 +40,9 @@ fi
 
 BACKUP_DIR="${BACKUP_DIR:-$APP_DIR/backups}"
 KEEP="${BACKUP_KEEP:-14}"                # quantos backups manter (local e nuvem)
-REMOTE="${BACKUP_RCLONE_REMOTE:-}"       # ex.: b2backup:meu-bucket/germanos-db
+REMOTE="${BACKUP_RCLONE_REMOTE:-}"       # ex.: b2backup:meu-bucket/construlog-db
 STAMP="$(date '+%Y%m%d-%H%M%S')"
-FILE="$BACKUP_DIR/germanos-db-$STAMP.sql.gz"
+FILE="$BACKUP_DIR/construlog-db-$STAMP.sql.gz"
 
 mkdir -p "$BACKUP_DIR"
 
@@ -66,7 +66,7 @@ fi
 log "dump ok ($(du -h "$FILE" | cut -f1))"
 
 # Rotação local: mantém os últimos $KEEP
-ls -1t "$BACKUP_DIR"/germanos-db-*.sql.gz 2>/dev/null | tail -n +"$((KEEP + 1))" | xargs -r rm -f
+ls -1t "$BACKUP_DIR"/construlog-db-*.sql.gz 2>/dev/null | tail -n +"$((KEEP + 1))" | xargs -r rm -f
 log "rotação local: mantendo os últimos $KEEP"
 
 # Upload opcional para a nuvem
@@ -74,7 +74,7 @@ if [ -n "$REMOTE" ]; then
   log "enviando para $REMOTE"
   rclone copy "$FILE" "$REMOTE" --no-traverse
   # Rotação na nuvem: mantém os últimos $KEEP
-  rclone lsf "$REMOTE" --include 'germanos-db-*.sql.gz' 2>/dev/null | sort -r | tail -n +"$((KEEP + 1))" \
+  rclone lsf "$REMOTE" --include 'construlog-db-*.sql.gz' 2>/dev/null | sort -r | tail -n +"$((KEEP + 1))" \
     | while read -r f; do rclone deletefile "$REMOTE/$f" 2>/dev/null || true; done
   log "upload concluído"
 else

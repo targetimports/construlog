@@ -1,6 +1,6 @@
 // Rastreia, no localStorage, as pendências que o usuário já "viu" (clicou),
 // para não contarem mais no sino. Compartilhado entre o sino e a página.
-const KEY = 'germanos_pendencias_vistas';
+const KEY = 'construlog_pendencias_vistas';
 const EVENT = 'pendencias-vistas-changed';
 
 export const getVistas = () => {

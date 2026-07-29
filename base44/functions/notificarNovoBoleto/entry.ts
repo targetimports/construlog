@@ -160,7 +160,7 @@ Deno.serve(async (req) => {
 
     <div style="text-align: center; margin-top: 24px; border-top: 1px solid #e5e7eb; padding-top: 16px;">
       <p style="color: #9ca3af; font-size: 12px; margin: 0;">
-        Este e-mail foi gerado automaticamente pelo sistema Germanos Construlog.<br>
+        Este e-mail foi gerado automaticamente pelo sistema Construlog Construlog.<br>
         Acesse o sistema para gerenciar suas obrigações financeiras.
       </p>
     </div>
@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
           to: email,
           subject: assunto,
           body: corpoEmail,
-          from_name: 'Germanos Construlog — Financeiro'
+          from_name: 'Construlog Construlog — Financeiro'
         });
         emailsEnviados++;
       } catch (err) {

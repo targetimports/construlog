@@ -4,7 +4,7 @@
 //   body { lat, lon }     → reverse
 // Retorna { results: [...] } (sempre array; reverse vira array de 1).
 
-const UA = 'GermanosERP/1.0 (contato@targetimports.com)';
+const UA = 'ConstrulogERP/1.0 (contato@targetimports.com)';
 
 export default async function geocode({ body }) {
   const { q, lat, lon, limit = 8 } = body || {};

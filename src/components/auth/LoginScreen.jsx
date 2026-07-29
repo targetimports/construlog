@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Eye, EyeOff, Loader2, ArrowLeft } from 'lucide-react';
 import { lerBrandingCache } from '@/components/shared/useBranding';
+import { ROTA_POS_LOGIN } from '@/config/modulos';
 
 export default function LoginScreen() {
   // Tela pré-auth: usa o branding cacheado (de quando o usuário já entrou antes).
@@ -48,11 +49,13 @@ export default function LoginScreen() {
       await base44.auth.login(email.trim(), password);
       // O toast de boas-vindas não pode sair aqui: o reload abaixo o destruiria.
       // Deixamos um sinal para a próxima página exibi-lo já com o usuário carregado.
-      sessionStorage.setItem('germanos:bemvindo', '1');
-      // Sem rota específica (raiz/landing) → Dashboard; senão recarrega a rota atual.
-      const path = window.location.pathname;
-      if (path === '/' || path === '') {
-        window.location.href = '/Dashboard';
+      sessionStorage.setItem('construlog:bemvindo', '1');
+      // Vindo da landing ou de /Login (a porta de entrada) → tela inicial de quem
+      // entrou (painel de assinantes, ou o ERP quando ele estiver ligado).
+      // Em qualquer outra rota, recarrega onde estava.
+      const path = window.location.pathname.toLowerCase();
+      if (path === '/' || path === '' || path === '/login') {
+        window.location.href = ROTA_POS_LOGIN;
       } else {
         window.location.reload();
       }

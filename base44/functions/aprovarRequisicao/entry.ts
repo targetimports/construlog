@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
             ${motivo ? `\n\nMotivo: ${motivo}` : ''}
 
             Atenciosamente,
-            Sistema GERMANOS CONSTRULOG
+            Sistema CONSTRULOG CONSTRULOG
           `
         });
       } catch (emailError) {

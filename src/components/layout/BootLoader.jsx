@@ -34,7 +34,7 @@ export default function BootLoader({
       <div className="w-full max-w-sm px-6 space-y-6 relative z-10">
         {/* Logo/Branding */}
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-blue-600">Germanos</h1>
+          <h1 className="text-2xl font-bold text-blue-600">Construlog</h1>
           <p className="text-sm text-gray-600 mt-1">Construlog</p>
         </div>
 

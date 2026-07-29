@@ -12,19 +12,19 @@ Deno.serve(async (req) => {
     // Cria usuários de teste pendentes
     const usuariosTeste = [
       {
-        email: 'teste1@germanos.com.br',
+        email: 'teste1@construlog.com.br',
         full_name: 'Usuário Teste 1',
         telefone: '11999999999',
         cargo: 'Engenharia'
       },
       {
-        email: 'teste2@germanos.com.br',
+        email: 'teste2@construlog.com.br',
         full_name: 'Usuário Teste 2',
         telefone: '11988888888',
         cargo: 'Compras'
       },
       {
-        email: 'teste3@germanos.com.br',
+        email: 'teste3@construlog.com.br',
         full_name: 'Usuário Teste 3',
         telefone: '11977777777',
         cargo: 'Almoxarifado'

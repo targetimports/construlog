@@ -38,7 +38,7 @@ export function useMinhaLocalizacao() {
   const atualizar = useCallback((manual = false) => {
     // Contexto inseguro (HTTP/IP): o navegador bloqueia o GPS.
     if (typeof window !== 'undefined' && window.isSecureContext === false) {
-      setErro({ tipo: 'inseguro', msg: 'A localização (GPS) só é liberada em HTTPS. Acesse o sistema por https://grupogermanos.com.br.' });
+      setErro({ tipo: 'inseguro', msg: 'A localização (GPS) só é liberada em HTTPS. Acesse o sistema por https://construlog.com.br.' });
       if (manual) toast.error('GPS exige HTTPS');
       return;
     }

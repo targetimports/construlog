@@ -22,11 +22,11 @@ Deno.serve(async (req) => {
         try {
           await base44.asServiceRole.integrations.Core.SendEmail({
             to: data.email,
-            subject: 'Acesso Aprovado - Germanos Construlog',
+            subject: 'Acesso Aprovado - Construlog Construlog',
             body: `
               <h2>🎉 Seu acesso foi aprovado!</h2>
               <p>Olá ${data.full_name || ''},</p>
-              <p>Sua solicitação de acesso ao sistema <strong>Germanos Construlog</strong> foi aprovada.</p>
+              <p>Sua solicitação de acesso ao sistema <strong>Construlog Construlog</strong> foi aprovada.</p>
               <p>Você já pode fazer login e utilizar todas as funcionalidades do sistema.</p>
               <br>
               <p>Bem-vindo!</p>
@@ -51,14 +51,14 @@ Deno.serve(async (req) => {
         try {
           await base44.asServiceRole.integrations.Core.SendEmail({
             to: data.email,
-            subject: 'Solicitação de Acesso - Germanos Construlog',
+            subject: 'Solicitação de Acesso - Construlog Construlog',
             body: `
               <h2>Solicitação de Acesso</h2>
               <p>Olá ${data.full_name || ''},</p>
               <p>Informamos que sua solicitação de acesso ao sistema não foi aprovada neste momento.</p>
               <p>Para mais informações, entre em contato com o administrador do sistema.</p>
               <br>
-              <p>Atenciosamente,<br>Equipe Germanos Construlog</p>
+              <p>Atenciosamente,<br>Equipe Construlog Construlog</p>
             `
           });
         } catch (emailError) {

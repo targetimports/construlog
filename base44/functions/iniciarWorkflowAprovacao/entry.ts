@@ -125,7 +125,7 @@ Etapa: ${alcada.nome}
 Acesse o sistema para revisar e aprovar.
 
 ---
-Germanos Construlog
+Construlog Construlog
               `
             });
           } catch (emailError) {

@@ -82,7 +82,7 @@ export default async function aprovarRequisicao({ body, user }) {
           + `Descrição: ${requisicao.descricao_resumo || requisicao.titulo}\n`
           + `Aprovador: ${emailAprovador}`
           + `${aprovado ? `\nOrdem de Compra: ${ordemCompra?.numero}` : ''}`
-          + `${motivo ? `\n\nMotivo: ${motivo}` : ''}\n\nSistema GERMANOS CONSTRULOG`
+          + `${motivo ? `\n\nMotivo: ${motivo}` : ''}\n\nSistema CONSTRULOG CONSTRULOG`
       });
     } catch { /* e-mail é best-effort */ }
   }

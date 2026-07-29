@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     
     // Cabeçalho
     doc.setFontSize(20);
-    doc.text('Germanos Construlog', 20, 20);
+    doc.text('Construlog Construlog', 20, 20);
     doc.setFontSize(14);
     
     if (tipo === 'financeiro') {

@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 
 /**
- * AUDITORIA DE INTEGRAÇÃO - GERMANOS CONSTRULOG
+ * AUDITORIA DE INTEGRAÇÃO - CONSTRULOG CONSTRULOG
  * Documento técnico de correções aplicadas
  */
 

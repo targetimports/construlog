@@ -231,7 +231,7 @@ Deno.serve(async (req) => {
       doc.setFontSize(8);
       doc.setTextColor(100, 116, 139);
       doc.setFont('helvetica', 'normal');
-      doc.text('Germanos Construlog - Comparativo de Fornecedores', margin, pageHeight - 8);
+      doc.text('Construlog Construlog - Comparativo de Fornecedores', margin, pageHeight - 8);
       doc.text(`Página ${i} de ${totalPages}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
     }
 

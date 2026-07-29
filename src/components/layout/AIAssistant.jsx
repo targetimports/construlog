@@ -28,7 +28,7 @@ export default function AIAssistant() {
 
     try {
       const response = await base44.integrations.Core.InvokeLLM({
-        prompt: `Você é um consultor especializado em gestão de obras e construção civil, atuando como assistente do sistema Germanos Construlog. 
+        prompt: `Você é um consultor especializado em gestão de obras e construção civil, atuando como assistente do sistema Construlog Construlog. 
 
 Seu papel:
 - Responder de forma profissional, clara e direta
@@ -40,7 +40,7 @@ Seu papel:
 - Sempre converter datas brasileiras DD/MM/AAAA para o formato ISO (AAAA-MM-DD) quando necessário
 
 Contexto do sistema:
-O Germanos Construlog é um ERP completo para gestão de construção civil que inclui:
+O Construlog Construlog é um ERP completo para gestão de construção civil que inclui:
 - Gestão de obras e orçamentos
 - Controle financeiro e fluxo de caixa
 - Gestão de compras e fornecedores

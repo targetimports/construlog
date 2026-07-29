@@ -71,7 +71,7 @@ Motivo: ${comentario || 'Não informado'}
 Entre em contato para maiores detalhes.
 
 ---
-Germanos Construlog
+Construlog Construlog
             `
           });
         }

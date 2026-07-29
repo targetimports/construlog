@@ -38,13 +38,13 @@ Deno.serve(async (req) => {
     // 1. EMPRESAS
     // Matriz (Central de Compras)
     const matriz = await base44.asServiceRole.entities.Empresa.create({
-      nome: 'Germanos Holding',
-      razao_social: 'Germanos Construções e Incorporações Holding S.A.',
+      nome: 'Construlog Holding',
+      razao_social: 'Construlog Construções e Incorporações Holding S.A.',
       cnpj: '10.000.000/0001-00',
       tipo: 'matriz',
       e_central_compras: true,
       telefone: '(11) 3456-7890',
-      email: 'holding@germanos.com.br',
+      email: 'holding@construlog.com.br',
       endereco: 'Av. Paulista, 1000',
       cidade: 'São Paulo',
       estado: 'SP',
@@ -55,13 +55,13 @@ Deno.serve(async (req) => {
     // 5 Empresas Subsidiárias (gerenciam obras)
     const subsidiarias = await base44.asServiceRole.entities.Empresa.bulkCreate([
       {
-        nome: 'Germanos Infraestrutura SP',
-        razao_social: 'Germanos Infraestrutura São Paulo Ltda',
+        nome: 'Construlog Infraestrutura SP',
+        razao_social: 'Construlog Infraestrutura São Paulo Ltda',
         cnpj: '11.111.111/0001-11',
         tipo: 'subsidiaria',
         parent_id: matriz.id,
         telefone: '(11) 3456-7891',
-        email: 'infra.sp@germanos.com.br',
+        email: 'infra.sp@construlog.com.br',
         endereco: 'Av. Paulista, 1000 - Sala 101',
         cidade: 'São Paulo',
         estado: 'SP',
@@ -69,13 +69,13 @@ Deno.serve(async (req) => {
         status: 'ativa'
       },
       {
-        nome: 'Germanos Obras Públicas',
-        razao_social: 'Germanos Obras Públicas e Serviços Ltda',
+        nome: 'Construlog Obras Públicas',
+        razao_social: 'Construlog Obras Públicas e Serviços Ltda',
         cnpj: '22.222.222/0001-22',
         tipo: 'subsidiaria',
         parent_id: matriz.id,
         telefone: '(11) 3456-7892',
-        email: 'publicas@germanos.com.br',
+        email: 'publicas@construlog.com.br',
         endereco: 'Av. Paulista, 1000 - Sala 102',
         cidade: 'São Paulo',
         estado: 'SP',
@@ -83,13 +83,13 @@ Deno.serve(async (req) => {
         status: 'ativa'
       },
       {
-        nome: 'Germanos Edificações',
-        razao_social: 'Germanos Edificações Residenciais Ltda',
+        nome: 'Construlog Edificações',
+        razao_social: 'Construlog Edificações Residenciais Ltda',
         cnpj: '33.333.333/0001-33',
         tipo: 'subsidiaria',
         parent_id: matriz.id,
         telefone: '(11) 3456-7893',
-        email: 'edificacoes@germanos.com.br',
+        email: 'edificacoes@construlog.com.br',
         endereco: 'Av. Paulista, 1000 - Sala 103',
         cidade: 'São Paulo',
         estado: 'SP',
@@ -97,13 +97,13 @@ Deno.serve(async (req) => {
         status: 'ativa'
       },
       {
-        nome: 'Germanos Saúde',
-        razao_social: 'Germanos Construções Hospitalares Ltda',
+        nome: 'Construlog Saúde',
+        razao_social: 'Construlog Construções Hospitalares Ltda',
         cnpj: '44.444.444/0001-44',
         tipo: 'subsidiaria',
         parent_id: matriz.id,
         telefone: '(11) 3456-7894',
-        email: 'saude@germanos.com.br',
+        email: 'saude@construlog.com.br',
         endereco: 'Av. Paulista, 1000 - Sala 104',
         cidade: 'São Paulo',
         estado: 'SP',
@@ -111,13 +111,13 @@ Deno.serve(async (req) => {
         status: 'ativa'
       },
       {
-        nome: 'Germanos Metálicas',
-        razao_social: 'Germanos Estruturas Metálicas Ltda',
+        nome: 'Construlog Metálicas',
+        razao_social: 'Construlog Estruturas Metálicas Ltda',
         cnpj: '55.555.555/0001-55',
         tipo: 'subsidiaria',
         parent_id: matriz.id,
         telefone: '(11) 3456-7895',
-        email: 'metalicas@germanos.com.br',
+        email: 'metalicas@construlog.com.br',
         endereco: 'Av. Paulista, 1000 - Sala 105',
         cidade: 'São Paulo',
         estado: 'SP',
@@ -205,7 +205,7 @@ Deno.serve(async (req) => {
         salario: 3500,
         status: 'ativo',
         telefone: '(11) 98765-4321',
-        email: 'joao.silva@germanos.com.br'
+        email: 'joao.silva@construlog.com.br'
       },
       {
         nome: 'Maria Oliveira Costa',
@@ -217,7 +217,7 @@ Deno.serve(async (req) => {
         salario: 9500,
         status: 'ativo',
         telefone: '(11) 98765-1234',
-        email: 'maria.costa@germanos.com.br'
+        email: 'maria.costa@construlog.com.br'
       },
       {
         nome: 'Pedro Almeida Souza',
@@ -229,7 +229,7 @@ Deno.serve(async (req) => {
         salario: 5500,
         status: 'ativo',
         telefone: '(11) 98765-5678',
-        email: 'pedro.souza@germanos.com.br'
+        email: 'pedro.souza@construlog.com.br'
       },
       {
         nome: 'Ana Paula Ferreira',
@@ -240,7 +240,7 @@ Deno.serve(async (req) => {
         salario: 4500,
         status: 'ativo',
         telefone: '(11) 98765-8765',
-        email: 'ana.ferreira@germanos.com.br'
+        email: 'ana.ferreira@construlog.com.br'
       },
       {
         nome: 'Carlos Eduardo Lima',
@@ -251,7 +251,7 @@ Deno.serve(async (req) => {
         salario: 6000,
         status: 'ativo',
         telefone: '(11) 98765-4444',
-        email: 'carlos.lima@germanos.com.br'
+        email: 'carlos.lima@construlog.com.br'
       }
     ]);
     resultados.colaboradores = colaboradores.length;

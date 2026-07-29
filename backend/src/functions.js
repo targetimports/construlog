@@ -11,6 +11,7 @@ import salvarCustoHoraColaborador from './functions/salvarCustoHoraColaborador.j
 import gerarFolhaPagamento from './functions/gerarFolhaPagamento.js';
 import getEffectivePermissionsV2 from './functions/getEffectivePermissionsV2.js';
 import lerLogSistema from './functions/lerLogSistema.js';
+import testarInstanciaCliente from './functions/testarInstanciaCliente.js';
 import getMenuForBootstrap from './functions/getMenuForBootstrap.js';
 import getPermissoesCatalogo from './functions/getPermissoesCatalogo.js';
 import finalizarImportacaoCompleta from './functions/finalizarImportacaoCompleta.js';
@@ -189,6 +190,7 @@ import testarEntidadesCore from './functions/testarEntidadesCore.js';
 
 export const handlers = {
   lerLogSistema,
+  testarInstanciaCliente,
   finalizarImportacaoCompleta,
   getOrcamentoConsolidacaoStatus,
   diagnosticarObraCampos,

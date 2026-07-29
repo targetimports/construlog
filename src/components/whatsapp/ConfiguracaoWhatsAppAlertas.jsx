@@ -157,7 +157,7 @@ export default function ConfiguracaoWhatsAppAlertas() {
       const response = await base44.functions.invoke('enviarWhatsAppAlerta', {
         numero: numeroDestino,
         titulo: 'Teste de Alerta',
-        mensagem: 'Este é um teste do sistema de alertas via WhatsApp do Germanos Construlog.',
+        mensagem: 'Este é um teste do sistema de alertas via WhatsApp do Construlog Construlog.',
         tipo: 'info'
       });
       return response.data;

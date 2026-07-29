@@ -47,7 +47,7 @@ Título: ${requisicao_titulo}
 Acesse o sistema para revisar e aprovar.
 
 ---
-Germanos Construlog
+Construlog Construlog
             `
           });
         }

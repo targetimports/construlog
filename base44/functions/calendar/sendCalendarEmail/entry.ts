@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
     // Enviar usando integração Base44
     try {
       await base44.asServiceRole.integrations.Core.SendEmail({
-        from_name: 'Calendário Germanos Construlog',
+        from_name: 'Calendário Construlog Construlog',
         to,
         subject,
         body: html
@@ -220,7 +220,7 @@ function buildEmailHTML(payload) {
                 Você está recebendo este e-mail porque está cadastrado como participante deste evento.
               </p>
               <p style="margin: 8px 0 0 0; color: #9CA3AF; font-size: 11px;">
-                Germanos Construlog - Sistema de Gestão de Obras
+                Construlog Construlog - Sistema de Gestão de Obras
               </p>
             </td>
           </tr>

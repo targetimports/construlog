@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     // Validar confirmação
     if (!confirmation || 
         confirmation.text1 !== 'APAGAR TUDO' || 
-        confirmation.text2 !== 'GERMANOS' ||
+        confirmation.text2 !== 'CONSTRULOG' ||
         !confirmation.otp) {
       return Response.json({ 
         error: 'Confirmação inválida. Verifique os campos.' 

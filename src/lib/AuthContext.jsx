@@ -14,14 +14,14 @@ export const AuthProvider = ({ children }) => {
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(false);
   const [authError, setAuthError] = useState(null);
-  const [appPublicSettings, setAppPublicSettings] = useState({ id: 'germanos', public_settings: {} });
+  const [appPublicSettings, setAppPublicSettings] = useState({ id: 'construlog', public_settings: {} });
 
   useEffect(() => {
     checkAppState();
     // Quando o shim sinaliza 401 (sessão expirada), re-checa → mostra a LoginScreen.
     const onUnauthorized = () => checkAppState();
-    window.addEventListener('germanos:unauthorized', onUnauthorized);
-    return () => window.removeEventListener('germanos:unauthorized', onUnauthorized);
+    window.addEventListener('construlog:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('construlog:unauthorized', onUnauthorized);
   }, []);
 
   const checkAppState = async () => {

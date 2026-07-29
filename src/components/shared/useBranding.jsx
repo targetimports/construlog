@@ -15,8 +15,8 @@ const DEFAULTS = {
 export function lerBrandingCache() {
   try {
     const cached = JSON.parse(localStorage.getItem('branding') || '{}');
-    // Descarta referência a asset removido (logo antiga Germanos).
-    if (cached.logo_url && String(cached.logo_url).includes('germanos-logo')) delete cached.logo_url;
+    // Descarta referência a asset removido (logo antiga Construlog).
+    if (cached.logo_url && String(cached.logo_url).includes('construlog-logo')) delete cached.logo_url;
     return { ...DEFAULTS, ...cached };
   } catch {
     return { ...DEFAULTS };
@@ -32,7 +32,7 @@ export function useBranding() {
   // Branding é do grupo → vem da MATRIZ (fallback p/ a primeira empresa visível).
   const emp = empresas.find((e) => e.tipo === 'matriz') || empresas[0];
   // A Empresa é a fonte da verdade. ENQUANTO ela carrega, usamos o último branding
-  // conhecido (cache do localStorage), não o DEFAULT — assim a logo salva (ex.: Germanos)
+  // conhecido (cache do localStorage), não o DEFAULT — assim a logo salva (ex.: Construlog)
   // aparece de imediato, sem o "flash" da logo padrão (Construlog) antes de carregar.
   const cache = lerBrandingCache();
   return {

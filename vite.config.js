@@ -7,6 +7,20 @@ import { fileURLToPath, URL } from 'node:url'
 // O alias "@" era fornecido por aquele plugin — agora é declarado aqui.
 export default defineConfig({
   logLevel: 'error',
+  // Desenvolvimento local: reproduz o que o nginx faz em produção — o front chama
+  // /api/... e o backend serve as rotas na raiz (/auth, /entities...), então o
+  // prefixo é removido no proxy, igual ao `proxy_pass .../` do nginx.
+  server: {
+    port: 8888,
+    strictPort: true,
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api/, ''),
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({

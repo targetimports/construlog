@@ -13,7 +13,7 @@ import PermissaoGuard from '../components/shared/PermissaoGuard';
 export default function Configuracoes() {
   const queryClient = useQueryClient();
   const [configForm, setConfigForm] = useState({
-    nomeEmpresa: 'Germanos Construlog',
+    nomeEmpresa: 'Construlog Construlog',
     moedaPadrao: 'BRL',
     requerAprovacaoMedicoes: true,
     requerAprovacaoCompras: true,

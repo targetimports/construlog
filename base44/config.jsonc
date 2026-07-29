@@ -1,5 +1,5 @@
 {
-  "name": "GERMANOS CONSTRULOG",
+  "name": "CONSTRULOG CONSTRULOG",
   "site": {
     "installCommand": "npm install",
     "buildCommand": "npm run build",

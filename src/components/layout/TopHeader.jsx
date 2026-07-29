@@ -88,7 +88,7 @@ export default function TopHeader({ currentPageName }) {
   });
 
   const { empresa, matriz, acessoGlobal } = useEmpresa();
-  const empresaLabel = acessoGlobal ? `${matriz?.nome || 'Grupo Germanos'} · Matriz` : (empresa?.nome || '');
+  const empresaLabel = acessoGlobal ? `${matriz?.nome || 'Grupo Construlog'} · Matriz` : (empresa?.nome || '');
 
   const cargoLabel = user?.cargo || (user?.role === 'admin' ? 'Administrador' : 'Usuário');
 

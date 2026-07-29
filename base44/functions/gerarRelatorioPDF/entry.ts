@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     // Header
     doc.setFontSize(20);
     doc.setTextColor(245, 158, 11);
-    doc.text('GERMANOS CONSTRULOG', 20, 20);
+    doc.text('CONSTRULOG CONSTRULOG', 20, 20);
     
     doc.setFontSize(16);
     doc.setTextColor(0, 0, 0);

@@ -175,7 +175,7 @@ export default function AjustesAdministracaoDados() {
       fullReset: true,  // Flag para apagar TUDO mesmo
       confirmation: {
         text1: 'APAGAR TUDO',
-        text2: 'GERMANOS',
+        text2: 'CONSTRULOG',
         otp: '999999'  // Não valida OTP quando fullReset=true
       }
     }),
@@ -250,7 +250,7 @@ export default function AjustesAdministracaoDados() {
         const element = document.createElement('a');
         const file = new Blob([JSON.stringify(data.backup, null, 2)], { type: 'application/json' });
         element.href = URL.createObjectURL(file);
-        element.download = `backup-germanos-${new Date().toISOString().split('T')[0]}.json`;
+        element.download = `backup-construlog-${new Date().toISOString().split('T')[0]}.json`;
         document.body.appendChild(element);
         element.click();
         document.body.removeChild(element);
@@ -318,7 +318,7 @@ export default function AjustesAdministracaoDados() {
   };
 
   const handleReset = () => {
-    if (confirmText1 !== 'APAGAR TUDO' || confirmText2 !== 'GERMANOS' || confirmOtp !== generatedOtp) {
+    if (confirmText1 !== 'APAGAR TUDO' || confirmText2 !== 'CONSTRULOG' || confirmOtp !== generatedOtp) {
       toast.error('Confirmação inválida. Verifique os campos.');
       return;
     }
@@ -334,7 +334,7 @@ export default function AjustesAdministracaoDados() {
   };
 
   const isConfirmValid = confirmText1 === 'APAGAR TUDO' && 
-                         confirmText2 === 'GERMANOS' && 
+                         confirmText2 === 'CONSTRULOG' && 
                          confirmOtp === generatedOtp;
 
   if (!user || !['admin', 'programador'].includes(user.role) && user.acesso_global !== true) {
@@ -523,12 +523,12 @@ export default function AjustesAdministracaoDados() {
                   </div>
 
                   <div>
-                    <Label>Digite: GERMANOS</Label>
+                    <Label>Digite: CONSTRULOG</Label>
                     <Input
                       value={confirmText2}
                       onChange={(e) => setConfirmText2(e.target.value)}
-                      placeholder="GERMANOS"
-                      className={confirmText2 === 'GERMANOS' ? 'border-green-500' : 'border-red-300'}
+                      placeholder="CONSTRULOG"
+                      className={confirmText2 === 'CONSTRULOG' ? 'border-green-500' : 'border-red-300'}
                     />
                   </div>
 
