@@ -52,9 +52,16 @@ router.get('/branding', async (_req, res) => {
       // Contatos da landing (botão "Fale conosco"). whatsapp = só dígitos c/ DDI.
       whatsapp: (emp?.whatsapp || '').replace(/\D/g, '') || null,
       email_contato: emp?.email || null,
+      // Telefone e endereço aparecem no rodapé público — são os dados de
+      // contato que a empresa já divulga, vindos do mesmo cadastro.
+      telefone: emp?.telefone || null,
+      endereco: emp?.endereco || null,
     });
   } catch {
-    res.json({ nome_empresa: null, nome_sistema: null, logo_url: null, favicon_url: null, whatsapp: null, email_contato: null });
+    res.json({
+      nome_empresa: null, nome_sistema: null, logo_url: null, favicon_url: null,
+      whatsapp: null, email_contato: null, telefone: null, endereco: null,
+    });
   }
 });
 
@@ -67,7 +74,7 @@ const escapeHtml = (s) => String(s || '').replace(/[&<>"']/g, (c) => (
 // RESEND_API_KEY / EMAIL_REMETENTE). Sem RESEND_API_KEY, o sendEmail apenas loga
 // (stub), então o fluxo funciona end-to-end mesmo antes de configurar o e-mail.
 // 3 mensagens por hora por IP. É o endpoint mais exposto do sistema: sem trava,
-// um script simples enche a caixa da Germanos e queima a reputação do remetente.
+// um script simples enche a caixa da Construlog e queima a reputação do remetente.
 const limiteContato = limitePorIP({
   nome: 'contato',
   janelaMs: 60 * 60 * 1000,
@@ -91,7 +98,7 @@ router.post('/contato', limiteContato, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'tamanho_excedido' });
     }
 
-    const destino = process.env.EMAIL_CONTATO || process.env.EMAIL_REMETENTE || 'contato@grupogermanos.com.br';
+    const destino = process.env.EMAIL_CONTATO || process.env.EMAIL_REMETENTE || 'contato@construlog.com.br';
     const html = `<h2>Novo contato pelo site</h2>
       <p><strong>Nome:</strong> ${escapeHtml(nome)}</p>
       <p><strong>E-mail:</strong> ${escapeHtml(email)}</p>
