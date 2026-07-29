@@ -7,7 +7,7 @@
 //   base44.asServiceRole.* → alias (no self-host tudo passa pelo JWT do usuário)
 
 const API_BASE = '/api';
-const TOKEN_KEY = 'germanos_token';
+const TOKEN_KEY = 'construlog_token';
 
 const getToken = () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } };
 const setToken = (t) => { try { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); } catch {} };
@@ -51,7 +51,7 @@ const apiFetch = async (path, options = {}) => {
 // faz o App renderizar a LoginScreen). Sem overlay vanilla.
 function showLogin() {
   if (typeof window !== 'undefined') {
-    window.dispatchEvent(new Event('germanos:unauthorized'));
+    window.dispatchEvent(new Event('construlog:unauthorized'));
   }
 }
 
@@ -137,6 +137,11 @@ const appLogs = {
 };
 
 const client = { auth, entities, integrations, functions, appLogs };
+// base44.api(path, opts) — chamada direta a uma rota do backend que não é
+// entidade nem function (ex.: /instalacao/configurar, /licenca). Já leva o token
+// e o tratamento de erro; evita cada tela reinventar o fetch.
+client.api = (path, { method = 'GET', body } = {}) =>
+  apiFetch(path, { method, body: body === undefined ? undefined : JSON.stringify(body) });
 // base44.users — coleção de usuários; mapeia para a entidade User.
 client.users = makeEntity('User');
 client.asServiceRole = client;

@@ -1,4 +1,4 @@
-name: germanos
+name: construlog
 
 services:
   db:
@@ -11,7 +11,7 @@ services:
     volumes:
       - dbdata:/var/lib/postgresql/data
     networks:
-      - germanos_net
+      - construlog_net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -32,6 +32,8 @@ services:
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
       SEED_ADMIN_NOME: ${SEED_ADMIN_NOME}
       SEED_ADMIN_SENHA: ${SEED_ADMIN_SENHA}
+      # Dados de exemplo — false em instalação de cliente (ver backend/src/seed.js).
+      SEED_DEMO: ${SEED_DEMO:-false}
       UPLOAD_DIR: /data/uploads
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_REMETENTE: ${EMAIL_REMETENTE:-}
@@ -40,6 +42,13 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-}
+      # Licenciamento: vazio = instalação livre, sem reportar nada.
+      BACKOFFICE_URL: ${BACKOFFICE_URL:-}
+      BACKOFFICE_API_KEY: ${BACKOFFICE_API_KEY:-}
+      # Gateway de pagamento (só no painel do fornecedor).
+      ASAAS_API_KEY: ${ASAAS_API_KEY:-}
+      ASAAS_AMBIENTE: ${ASAAS_AMBIENTE:-sandbox}
+      ASAAS_WEBHOOK_TOKEN: ${ASAAS_WEBHOOK_TOKEN:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-claude-sonnet-4-6}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -48,7 +57,7 @@ services:
       - uploads:/data/uploads
       - ./logs:/data/logs
     networks:
-      - germanos_net
+      - construlog_net
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/health || exit 1"]
       interval: 15s
@@ -70,12 +79,12 @@ services:
       # direto pelo nginx. Assim trocar um vídeo não exige rebuild do frontend.
       - ./videos:/usr/share/nginx/html/videos:ro
     networks:
-      - germanos_net
+      - construlog_net
 
 volumes:
   dbdata:
   uploads:
 
 networks:
-  germanos_net:
+  construlog_net:
     driver: bridge

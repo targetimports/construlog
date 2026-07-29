@@ -3,6 +3,22 @@ import crypto from 'node:crypto';
 import { nanoid } from 'nanoid';
 import { pool, query } from './db.js';
 
+// DADOS DE DEMONSTRAÇÃO — desligados por padrão.
+//
+// Estes seeds nasceram para desenvolvimento e demo: criam um grupo fictício
+// ("Construlog Construções" e irmãs), usuários com senha `demo1234`, estoque,
+// caixa com milhões e ativos de exemplo. Numa instalação de cliente isso é
+// inaceitável — empresas fantasmas no sistema dele e contas com senha pública.
+//
+// Por isso a regra é: instalação nasce VAZIA e a estrutura real (empresa,
+// caixa, estoque central) é criada na configuração inicial, com os dados do
+// cliente. Ligue SEED_DEMO=true só em ambiente seu, para demonstrar o produto.
+const SEED_DEMO = String(process.env.SEED_DEMO || '').toLowerCase() === 'true';
+
+const puloDemo = (nome) => {
+  console.log(`[seed] ${nome}: instalação limpa (SEED_DEMO desligado) — pulando dados de exemplo.`);
+};
+
 export async function seedAdmin() {
   const email = (process.env.SEED_ADMIN_EMAIL || 'contato@targetimports.com').toLowerCase().trim();
   const name = process.env.SEED_ADMIN_NOME || 'Administrador';
@@ -43,6 +59,8 @@ export async function seedAdmin() {
 // vincula as obras existentes às empresas-membro e cria um usuário gestor por
 // empresa (senha demo1234) para demonstrar o isolamento por empresa.
 export async function seedEmpresas() {
+  if (!SEED_DEMO) return puloDemo('Empresas');
+
   const jaTem = await query(`SELECT id FROM entity_empresa WHERE data->>'tipo' = 'matriz' LIMIT 1`);
   if (jaTem.rows.length) {
     console.log('[seed] Empresas do grupo já existem — pulando.');
@@ -60,16 +78,16 @@ export async function seedEmpresas() {
 
   // 1) Matriz (dona do estoque central, da frota e da tesouraria central).
   const matrizId = await insEmpresa({
-    nome: 'Grupo Germanos', tipo: 'matriz',
-    razao_social: 'Grupo Germanos Participações Ltda', cnpj: '00.000.000/0001-00',
+    nome: 'Grupo Construlog', tipo: 'matriz',
+    razao_social: 'Grupo Construlog Participações Ltda', cnpj: '00.000.000/0001-00',
     ativa: true, saldo_verba: 0,
   });
 
   // 2) Empresas-membro.
   const membrosDef = [
-    { nome: 'Germanos Construções',   razao_social: 'Germanos Construções Ltda',   cnpj: '11.111.111/0001-11' },
-    { nome: 'Germanos Engenharia',    razao_social: 'Germanos Engenharia Ltda',    cnpj: '22.222.222/0001-22' },
-    { nome: 'Germanos Incorporadora', razao_social: 'Germanos Incorporadora Ltda', cnpj: '33.333.333/0001-33' },
+    { nome: 'Construlog Construções',   razao_social: 'Construlog Construções Ltda',   cnpj: '11.111.111/0001-11' },
+    { nome: 'Construlog Engenharia',    razao_social: 'Construlog Engenharia Ltda',    cnpj: '22.222.222/0001-22' },
+    { nome: 'Construlog Incorporadora', razao_social: 'Construlog Incorporadora Ltda', cnpj: '33.333.333/0001-33' },
   ];
   const membros = [];
   for (const m of membrosDef) {
@@ -90,9 +108,9 @@ export async function seedEmpresas() {
   // 4) Um usuário gestor por empresa-membro (senha demo1234) — testa o isolamento.
   const senhaHash = await bcrypt.hash('demo1234', 10);
   const slug = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/^germanos\s*/i, '').replace(/[^a-z]+/g, '.').replace(/^\.|\.$/g, '');
+    .replace(/^construlog\s*/i, '').replace(/[^a-z]+/g, '.').replace(/^\.|\.$/g, '');
   for (const m of membros) {
-    const email = `gestor.${slug(m.nome)}@grupogermanos.com.br`;
+    const email = `gestor.${slug(m.nome)}@construlog.com.br`;
     const dup = await query('SELECT id FROM auth_users WHERE email = $1', [email]);
     if (dup.rows.length) continue;
     await query(
@@ -116,6 +134,9 @@ export async function seedEmpresas() {
 // Central (Matriz) + 1 almoxarifado por empresa-membro + insumos base + entrada
 // inicial no Central (para o saldo aparecer). Idempotente (guarda no nível CENTRAL).
 export async function seedEstoque() {
+  // O estoque CENTRAL real é criado na configuração inicial, junto com a matriz.
+  if (!SEED_DEMO) return puloDemo('Estoque');
+
   const jaTem = await query(`SELECT id FROM entity_localestoque WHERE data->>'nivel' = 'CENTRAL' LIMIT 1`);
   if (jaTem.rows.length) {
     console.log('[seed] Estoque (3 níveis) já existe — pulando.');
@@ -133,7 +154,7 @@ export async function seedEstoque() {
   };
 
   // Estoque CENTRAL da Matriz (dono do estoque geral do grupo).
-  const centralId = await insLocal({ nome: 'Estoque Central — Grupo Germanos', nivel: 'CENTRAL', tipo: 'CENTRAL', empresa_id: matrizId, ativo: true });
+  const centralId = await insLocal({ nome: 'Estoque Central — Grupo Construlog', nivel: 'CENTRAL', tipo: 'CENTRAL', empresa_id: matrizId, ativo: true });
 
   // Um almoxarifado por empresa-membro (nível EMPRESA).
   for (const m of membros.rows) {
@@ -214,7 +235,9 @@ export async function seedFinanceiro() {
   for (const e of empresas.rows) {
     const jaCaixa = await query(`SELECT id FROM entity_contatesouraria WHERE data->>'empresa_id' = $1 LIMIT 1`, [e.id]);
     if (jaCaixa.rows.length) continue;
-    const saldo = e.tipo === 'matriz' ? 2000000 : 100000;
+    // Caixa é estrutura (toda empresa precisa de um); o dinheiro dentro dele é
+    // que é demonstração. Instalação de cliente começa zerada.
+    const saldo = SEED_DEMO ? (e.tipo === 'matriz' ? 2000000 : 100000) : 0;
     await query(`INSERT INTO entity_contatesouraria (id, data, created_by) VALUES ($1, $2::jsonb, 'seed')`,
       [nanoid(), JSON.stringify({
         nome: `Caixa — ${e.nome}`, tipo: 'caixa', empresa_id: e.id,
@@ -223,12 +246,15 @@ export async function seedFinanceiro() {
       })]);
   }
 
-  // 3) Verba inicial demo p/ cada empresa-membro (a Matriz já "repassou").
+  // 3) Verba inicial p/ cada empresa-membro (a Matriz já "repassou") — só demo.
+  //    Numa instalação real, a verba entra pelo repasse feito no sistema.
   const membros = empresas.rows.filter((e) => e.tipo === 'membro');
-  for (const m of membros) {
-    await query(`UPDATE entity_empresa SET data = data || $2::jsonb WHERE id = $1`, [m.id, JSON.stringify({ saldo_verba: 500000 })]);
+  if (SEED_DEMO) {
+    for (const m of membros) {
+      await query(`UPDATE entity_empresa SET data = data || $2::jsonb WHERE id = $1`, [m.id, JSON.stringify({ saldo_verba: 500000 })]);
+    }
   }
-  console.log(`[seed] Financeiro: backfill ${back} lançamentos + caixa por empresa + verba demo p/ ${membros.length} membros.`);
+  console.log(`[seed] Financeiro: backfill ${back} lançamentos + caixa por empresa${SEED_DEMO ? ` + verba demo p/ ${membros.length} membros` : ' (saldos zerados)'}.`);
 }
 
 // ───────────── Seed frota (Fase 3 — ativo único) ─────────────
@@ -284,13 +310,16 @@ export async function seedFrota() {
   await query(`UPDATE entity_ativo SET data = jsonb_set(data, '{horimetro_atual}', '0') WHERE NOT (data ? 'horimetro_atual')`);
 
   // 4) Garante ativos demo com tarifa + medidor (p/ demonstrar o empréstimo).
-  const comTarifa = await query(`SELECT id FROM entity_ativo WHERE COALESCE(NULLIF(data->>'custo_hora','')::numeric,0) > 0 OR COALESCE(NULLIF(data->>'custo_diaria','')::numeric,0) > 0 LIMIT 1`).catch(() => ({ rows: [] }));
+  //    Só em demonstração: o cliente cadastra a frota dele.
+  const comTarifa = SEED_DEMO
+    ? await query(`SELECT id FROM entity_ativo WHERE COALESCE(NULLIF(data->>'custo_hora','')::numeric,0) > 0 OR COALESCE(NULLIF(data->>'custo_diaria','')::numeric,0) > 0 LIMIT 1`).catch(() => ({ rows: [] }))
+    : { rows: [1] };
   if (!comTarifa.rows.length) {
     await insAtivo({ tipo: 'maquina', nome: 'Escavadeira CAT 320', codigo: 'MAQ-001', status: 'disponivel', custo_hora: 180, custo_diaria: 0, horimetro_atual: 1200, km_atual: 0 });
     await insAtivo({ tipo: 'maquina', nome: 'Retroescavadeira JCB 3CX', codigo: 'MAQ-002', status: 'disponivel', custo_hora: 140, custo_diaria: 0, horimetro_atual: 800, km_atual: 0 });
     await insAtivo({ tipo: 'veiculo', nome: 'Caminhão Mercedes Atego', codigo: 'FRO-001', placa: 'ABC1D23', status: 'disponivel', custo_hora: 0, custo_diaria: 350, km_atual: 45000, horimetro_atual: 0 });
   }
-  console.log(`[seed] Frota: ${migV} veículos + ${migE} equipamentos migrados p/ Ativo; medidores backfilled; ativos demo garantidos.`);
+  console.log(`[seed] Frota: ${migV} veículos + ${migE} equipamentos migrados p/ Ativo; medidores backfilled${SEED_DEMO ? '; ativos demo garantidos' : ''}.`);
 }
 
 // ───────────── Seed manutenção do ativo (Fase 3 — consolidação 3→1) ─────────────
