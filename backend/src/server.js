@@ -5,6 +5,10 @@ import entitiesRouter from './entities.js';
 import integrationsRouter, { filesRouter } from './integrations.js';
 import functionsRouter from './functions.js';
 import publicRouter from './public.js';
+import integracaoRouter from './integracao.js';
+import { iniciarLicenca, exigirLicenca, statusLicenca } from './licenca.js';
+import { webhookRouter, pagamentosRouter } from './pagamentos/rotas.js';
+import instalacaoRouter from './instalacao.js';
 import { errorHandler } from './middleware.js';
 import { limitePorIP } from './rateLimit.js';
 import { logEvent } from './logger.js';
@@ -84,8 +88,23 @@ app.use(limitePorIP({
 }));
 
 app.use('/public', publicRouter); // rotas públicas (sem auth) — ex.: contato da landing
+app.use('/integracao', integracaoRouter); // heartbeat das instalações (auth por chave de API)
+app.use('/webhooks', webhookRouter); // avisos do gateway de pagamento (auth por token no header)
+// Configuração inicial: /status é público (o front decide o que mostrar antes do
+// login); /configurar exige admin. Fica acima da licença — uma instalação que
+// nem foi configurada ainda não pode ser barrada por ela.
+app.use('/instalacao', instalacaoRouter);
 app.use('/auth', authRouter);
+
+// Estado da licença desta instalação — o front consulta para exibir o bloqueio.
+app.get('/licenca', (_req, res) => res.json(statusLicenca()));
+
+// Daqui para baixo tudo passa pela licença. /public, /integracao e /auth ficam
+// acima de propósito: bloqueado, o usuário ainda entra e vê o porquê.
+app.use(exigirLicenca);
+
 app.use('/entities', entitiesRouter);
+app.use('/pagamentos', pagamentosRouter);
 app.use('/integrations', integrationsRouter);
 app.use('/functions', functionsRouter);
 app.use('/files', filesRouter);
@@ -105,8 +124,9 @@ const PORT = process.env.PORT || 3000;
     await seedManutencaoAtivo();
     await seedBackfillEscopoObra();
     await seedBackfillUsuariosEmpresa();
-    app.listen(PORT, () => console.log(`[server] germanos-construlog API on :${PORT}`));
+    app.listen(PORT, () => console.log(`[server] construlog API on :${PORT}`));
     startScheduler();
+    iniciarLicenca();
   } catch (err) {
     console.error('[server] startup failed:', err);
     await pool.end();
