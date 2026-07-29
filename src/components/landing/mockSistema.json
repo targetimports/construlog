@@ -1,0 +1,88 @@
+{
+  "_comentario": "Dados de exemplo do preview da landing. Números fictícios e redondos, de propósito — não são de cliente real. Trocar aqui muda o preview inteiro, sem mexer no componente.",
+
+  "usuario": { "nome": "Ricardo Alves", "papel": "ENGENHARIA", "iniciais": "RA" },
+  "empresa": "Construlog Incorporadora · Matriz",
+
+  "_menuRail": "A sidebar do sistema fica recolhida em ícones; a lista abaixo é só a ordem deles.",
+  "menu": [
+    "PanelLeft", "Search", "LayoutDashboard", "Calendar", "Building2", "ShoppingCart",
+    "ClipboardList", "Boxes", "DollarSign", "Users", "BarChart3", "Truck", "Bell", "Settings"
+  ],
+
+  "secoes": [
+    { "id": "visao_geral", "nome": "Visão Geral", "icone": "LayoutDashboard" },
+    { "id": "orcamento", "nome": "Orçamento & Contratos", "icone": "FileText" },
+    { "id": "cronograma", "nome": "Cronograma", "icone": "Calendar" },
+    { "id": "medicoes", "nome": "Medições", "icone": "ClipboardList" },
+    { "id": "financeiro", "nome": "Financeiro", "icone": "DollarSign" },
+    { "id": "suprimentos", "nome": "Suprimentos", "icone": "Package" },
+    { "id": "ativos", "nome": "Veículos & Ativos", "icone": "Truck" },
+    { "id": "equipe_diario", "nome": "Equipe & Diário", "icone": "Users" },
+    { "id": "documentos", "nome": "Documentos", "icone": "FolderOpen" },
+    { "id": "relatorios", "nome": "Relatórios", "icone": "BarChart3" }
+  ],
+
+  "obra": {
+    "nome": "Residencial Alto da Serra",
+    "codigo": "OBR-2026-014",
+    "status": "Em Andamento",
+    "cliente": "Incorporadora Vale Verde Ltda",
+    "empresaResponsavel": "Construlog Incorporadora",
+    "percentualExecutado": "62.4"
+  },
+
+  "visaoGeral": {
+    "kpis": [
+      { "label": "Valor do Contrato", "valor": "R$ 4.216.430,00", "cor": "text-gray-900", "icone": "FileText" },
+      { "label": "Medido (realizado)", "valor": "R$ 2.631.052,00", "sub": "62,4% do contrato", "cor": "text-blue-700", "icone": "CircleDollarSign" },
+      { "label": "A Receber (pendente)", "valor": "R$ 380.000,00", "cor": "text-emerald-700", "icone": "TrendingUp" },
+      { "label": "A Pagar (pendente)", "valor": "R$ 134.600,00", "cor": "text-red-700", "icone": "TrendingDown" }
+    ],
+    "ultimaMedicao": { "numero": "4", "percentual": "62.4", "acumulado": "R$ 2.631.052,00", "data": "25/07/2026" },
+    "contratoPrazo": {
+      "periodo": "08/01/2026",
+      "avancoFisico": "62.4%",
+      "saldoExecutar": "R$ 1.585.378,00"
+    },
+    "diarios": [
+      { "data": "27/07/2026", "clima": "nublado" },
+      { "data": "26/07/2026", "clima": "nublado" },
+      { "data": "25/07/2026", "clima": "sol" },
+      { "data": "24/07/2026", "clima": "chuva fraca" }
+    ]
+  },
+
+  "orcamento": {
+    "totalItens": 626,
+    "total": "R$ 4.216.430,00",
+    "itens": [
+      { "codigo": "01.02.001", "descricao": "Alvenaria de vedação bloco cerâmico", "unidade": "m²", "qtd": "1.240,00", "unitario": "R$ 70,00", "total": "R$ 86.800,00" },
+      { "codigo": "02.01.004", "descricao": "Concreto estrutural FCK 30 MPa", "unidade": "m³", "qtd": "310,00", "unitario": "R$ 800,00", "total": "R$ 248.000,00" },
+      { "codigo": "03.04.002", "descricao": "Reboco interno paulista", "unidade": "m²", "qtd": "2.180,00", "unitario": "R$ 34,00", "total": "R$ 74.120,00" },
+      { "codigo": "04.01.001", "descricao": "Instalações elétricas — pavimento tipo", "unidade": "vb", "qtd": "1,00", "unitario": "R$ 132.500,00", "total": "R$ 132.500,00" }
+    ]
+  },
+
+  "financeiro": {
+    "kpis": [
+      { "label": "Recebido no mês", "valor": "R$ 420.000,00", "cor": "text-emerald-700" },
+      { "label": "Pago no mês", "valor": "R$ 134.600,00", "cor": "text-red-700" },
+      { "label": "Saldo em caixa", "valor": "R$ 666.320,00", "cor": "text-blue-700" }
+    ],
+    "lancamentos": [
+      { "descricao": "Medição 04 — Incorporadora Vale Verde", "categoria": "Medição", "vencimento": "25/07/2026", "valor": "R$ 420.000,00", "tipo": "receber", "status": "Recebido" },
+      { "descricao": "Casa do Construtor — cimento e areia", "categoria": "Material", "vencimento": "22/07/2026", "valor": "R$ 38.400,00", "tipo": "pagar", "status": "Pago" },
+      { "descricao": "Folha da obra — julho", "categoria": "Mão de Obra", "vencimento": "05/08/2026", "valor": "R$ 96.200,00", "tipo": "pagar", "status": "Pendente" },
+      { "descricao": "Medição 05 — prevista", "categoria": "Medição", "vencimento": "25/08/2026", "valor": "R$ 380.000,00", "tipo": "receber", "status": "Pendente" }
+    ]
+  },
+
+  "diario": {
+    "data": "28/07/2026",
+    "clima": "Sol",
+    "efetivo": 18,
+    "producao": "Alvenaria 3º pavimento",
+    "percentual": 74
+  }
+}
