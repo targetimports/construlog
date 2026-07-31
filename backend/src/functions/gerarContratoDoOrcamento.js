@@ -22,6 +22,25 @@ export default async function gerarContratoDoOrcamento({ body, user }) {
 
   const totalContrato = itens.reduce((s, it) => s + (Number(it.valor_total) || 0), 0);
 
+  // CUSTO PREVISTO — a linha-base. O contrato congela, junto com o preço de
+  // venda, o custo que o orçamento previa para cada serviço. É contra ESTE
+  // número que o custo real vai ser comparado, e não contra o orçamento, que
+  // segue editável: sem congelar, quem edita o orçamento apaga o próprio desvio
+  // e a obra parece sempre no rumo.
+  const obra = (await store.filter('Obra', { id: obra_id }))[0] || {};
+  const bdiObra = Number(obra.bdi_percentual) || 0;
+  const custoDoItem = (it, precoVenda) => {
+    const c = Number(it.custo_unitario);
+    // O orçamento tem custo próprio e ele é menor que a venda? É o caso normal.
+    if (c > 0 && c < precoVenda * 1.0001) return { valor: c, origem: 'orcamento' };
+    // Custo igual à venda (importação antiga) ou ausente: deriva do BDI da obra.
+    if (bdiObra > 0 && precoVenda > 0) {
+      return { valor: r2(precoVenda / (1 + bdiObra / 100)), origem: 'bdi_obra' };
+    }
+    return { valor: 0, origem: 'indisponivel' };
+  };
+  let totalCustoPrevisto = 0;
+
   const todasVersoes = (await store.filter('ContratoVersao', { obra_id })) || [];
   const numeroVersao = todasVersoes.reduce((m, v) => Math.max(m, Number(v.numero_versao) || 0), 0) + 1;
 
@@ -45,6 +64,8 @@ export default async function gerarContratoDoOrcamento({ body, user }) {
     const total = Number(it.valor_total) || r2(qtd * (Number(it.valor_unitario) || Number(it.custo_unitario) || 0));
     const preco = qtd > 0 ? r2(total / qtd) : (Number(it.valor_unitario) || Number(it.custo_unitario) || 0);
     const etapa = it.etapa || 'Geral';
+    const custo = custoDoItem(it, preco);
+    totalCustoPrevisto += custo.valor * qtd;
     await store.create('ContratoItem', {
       contrato_versao_id: versao.id,
       obra_id,
@@ -61,14 +82,28 @@ export default async function gerarContratoDoOrcamento({ body, user }) {
       preco_unit_com_bdi: preco,
       preco_total: total,
       total,
+      custo_unit_previsto: custo.valor,
+      custo_total_previsto: r2(custo.valor * qtd),
+      custo_origem: custo.origem,
       ordem,
     }, user?.email || null);
   }
+
+  // Grava o custo previsto do contrato na própria versão: é o retrato da
+  // linha-base no momento em que ela foi criada. Recalcular depois somando os
+  // itens daria outro número se alguém editar um item — e aí não seria base.
+  const margem = totalContrato > 0 ? ((totalContrato - totalCustoPrevisto) / totalContrato) * 100 : 0;
+  await store.update('ContratoVersao', versao.id, {
+    custo_previsto_total: r2(totalCustoPrevisto),
+    margem_prevista_percentual: Math.round(margem * 100) / 100,
+  }).catch(() => {});
 
   return {
     ok: true,
     message: `Contrato gerado com ${itens.length} item(ns).`,
     contrato_versao_id: versao.id,
     total_contrato: r2(totalContrato),
+    custo_previsto_total: r2(totalCustoPrevisto),
+    margem_prevista_percentual: Math.round(margem * 100) / 100,
   };
 }

@@ -26,6 +26,13 @@ import ativarObraAPartirDoOrcamento from './functions/ativarObraAPartirDoOrcamen
 import gerarOCDaCotacao from './functions/gerarOCDaCotacao.js';
 import processarRecebimentoMaterial from './functions/processarRecebimentoMaterial.js';
 import gerarContratoDoOrcamento from './functions/gerarContratoDoOrcamento.js';
+import apontarCustoServico from './functions/apontarCustoServico.js';
+import apontarCustoServicoEmLote from './functions/apontarCustoServicoEmLote.js';
+import getCustosNaoApontados from './functions/getCustosNaoApontados.js';
+import getCustoRealPorServico from './functions/getCustoRealPorServico.js';
+import getDesvioObra from './functions/getDesvioObra.js';
+import salvarJustificativaDesvio from './functions/salvarJustificativaDesvio.js';
+import fecharMesObra, { getConferenciaFechamento, reabrirMesObra } from './functions/fecharMesObra.js';
 import criarBMSemWizard from './functions/criarBMSemWizard.js';
 import calcBMv2 from './functions/calcBMv2.js';
 import onBMApproveWithFinance from './functions/onBMApproveWithFinance.js';
@@ -203,6 +210,15 @@ export const handlers = {
   gerarOCDaCotacao,
   processarRecebimentoMaterial,
   gerarContratoDoOrcamento,
+  apontarCustoServico,
+  apontarCustoServicoEmLote,
+  getCustosNaoApontados,
+  getCustoRealPorServico,
+  getDesvioObra,
+  salvarJustificativaDesvio,
+  fecharMesObra,
+  getConferenciaFechamento,
+  reabrirMesObra,
   criarBMSemWizard,
   calcBMv2,
   onBMApproveWithFinance,

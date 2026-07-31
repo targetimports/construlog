@@ -65,6 +65,8 @@ import SecaoVisaoGeral from '../components/obra/SecaoVisaoGeral';
 import CentroCustosObraTab from '../components/obra/CentroCustosObraTab';
 import RecebimentosPrevistoTab from '../components/recebimentos/RecebimentosPrevistoTab';
 import CustosPrevistoTab from '../components/financeiro/CustosPrevistoTab';
+import CustoPorServicoTab from '../components/financeiro/CustoPorServicoTab';
+import DesvioObraTab from '../components/financeiro/DesvioObraTab';
 import ContratosObraTab from '../components/obra/ContratosObraTab';
 import MedicoesObraTab from '../components/obra/MedicoesObraTab';
 import EmprestimosAtivos from './EmprestimosAtivos';
@@ -392,11 +394,13 @@ export default function ObraDetalhes() {
 
           {/* ── Financeiro (Contas · Recebimentos · Custos Previstos · Centro de Custos) ── */}
           {secaoAtiva === 'financeiro' && (
-            <Tabs value={abaAtual(['contas', 'recebimentos', 'custos_previstos', 'centro_custos'], 'contas')} onValueChange={setSubTab} className="space-y-4">
-              <TabsList className="flex w-full overflow-x-auto justify-start md:grid md:grid-cols-4">
+            <Tabs value={abaAtual(['contas', 'recebimentos', 'custos_previstos', 'custo_servico', 'desvios', 'centro_custos'], 'contas')} onValueChange={setSubTab} className="space-y-4">
+              <TabsList className="flex w-full overflow-x-auto justify-start md:grid md:grid-cols-6">
                 <TabsTrigger value="contas">Contas</TabsTrigger>
                 <TabsTrigger value="recebimentos">Recebimentos</TabsTrigger>
                 <TabsTrigger value="custos_previstos">Custos Previstos</TabsTrigger>
+                <TabsTrigger value="custo_servico">Custo por Serviço</TabsTrigger>
+                <TabsTrigger value="desvios">Desvios</TabsTrigger>
                 <TabsTrigger value="centro_custos">Centro de Custos</TabsTrigger>
               </TabsList>
               <TabsContent value="contas">
@@ -407,6 +411,12 @@ export default function ObraDetalhes() {
               </TabsContent>
               <TabsContent value="custos_previstos">
                 <CustosPrevistoTab obraId={obraId} podeEditar={podeEditar} />
+              </TabsContent>
+              <TabsContent value="custo_servico">
+                <CustoPorServicoTab obraId={obraId} podeEditar={podeEditar} />
+              </TabsContent>
+              <TabsContent value="desvios">
+                <DesvioObraTab obraId={obraId} podeEditar={podeEditar} />
               </TabsContent>
               <TabsContent value="centro_custos">
                 <CentroCustosObraTab obraId={obraId} />

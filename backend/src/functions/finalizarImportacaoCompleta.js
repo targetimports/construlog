@@ -1,4 +1,5 @@
 import { store } from '../entityStore.js';
+import { calcularCustoVenda } from '../custoOrcamento.js';
 
 // Porte da function base44 `finalizarImportacaoCompleta` (Deno) para Node.
 // Cria Obra + OrcamentoPlanejado + Cronograma + Itens do orçamento + status.
@@ -37,10 +38,35 @@ function normalizeOrcamentoPayload(payload = {}) {
   return { ...payload, versao };
 }
 
+// Cabeçalho do sintético (BDI, totais) sob os dois nomes que circulam no
+// sistema. O wizard manda o objeto do parser (`meta.bdi_percent`); payloads
+// antigos mandavam camelCase na raiz (`percentualBDI`). Ler só um dos dois
+// deixava o BDI e os totais do OrcamentoPlanejado zerados — era o caso das
+// duas linhas existentes no banco.
+function metaSintetico(dadosSintetico = {}) {
+  const m = dadosSintetico.meta || {};
+  const n = (...vs) => {
+    for (const v of vs) { const x = Number(v); if (Number.isFinite(x) && x !== 0) return x; }
+    return 0;
+  };
+  return {
+    bdi_percent: n(m.bdi_percent, dadosSintetico.percentualBDI, dadosSintetico.bdi_percent),
+    total_geral: n(m.total_geral, dadosSintetico.totalGeral, dadosSintetico.total_geral),
+    total_sem_bdi: n(m.total_sem_bdi, dadosSintetico.totalSemBDI, dadosSintetico.total_sem_bdi),
+    total_bdi: n(m.total_bdi, dadosSintetico.totalBDI, dadosSintetico.total_bdi),
+  };
+}
+
 // Persiste os itens em ItemOrcamento (síncrono). Retorna estatísticas.
 async function processarItensSync(obraId, dadosSintetico, createdBy) {
   const itensSrcRaw = dadosSintetico?.itens || dadosSintetico?.itensOrcamento || [];
-  const itensSrc = itensSrcRaw.filter((it) => !it.is_grupo);
+  const meta = metaSintetico(dadosSintetico);
+
+  // Separa custo (sem BDI) de venda (com BDI) ANTES de gravar. Até aqui a
+  // importação escrevia o mesmo número nos dois campos, o que zerava a margem
+  // do orçamento e deixava a obra sem linha-base de custo para comparar depois.
+  const analise = calcularCustoVenda(itensSrcRaw, meta);
+  const itensSrc = analise.itens.filter((it) => !it.is_grupo);
   const itens_parseados = itensSrc.length;
 
   // Mapa código-da-etapa -> nome (grupos de nível topo do sintético).
@@ -95,9 +121,18 @@ async function processarItensSync(obraId, dadosSintetico, createdBy) {
   for (const it of itensSrc) {
     try {
       const qtd = Number(it.quantidade ?? it.qtd ?? 0) || 0;
-      const vUnit = Number(it.custo_unitario ?? it.valor_unit ?? it.preco_unit ?? 0) || 0;
-      let vTotal = Number(it.custo_total ?? it.total ?? it.preco_total ?? 0) || 0;
+
+      // VENDA — o que se cobra do cliente. Continua sendo o total da planilha:
+      // é ele que soma o Total Geral e vira o valor do contrato.
+      const vUnit = Number(it.venda_unit) || 0;
+      let vTotal = Number(it.venda_total) || Number(it.total ?? it.preco_total ?? 0) || 0;
       if (!vTotal && qtd && vUnit) vTotal = Number((qtd * vUnit).toFixed(2));
+
+      // CUSTO — o que o serviço deve custar. Quando a planilha não permite
+      // deduzi-lo, repetimos a venda (comportamento anterior) em vez de gravar
+      // zero: zero apareceria como 100% de margem em toda tela que divide.
+      const cUnit = it.custo_unit == null ? vUnit : Number(it.custo_unit);
+      const cTotal = it.custo_total_calc == null ? vTotal : Number(it.custo_total_calc);
 
       const desc = it.descricao || it.nome || it.item || 'Item do orçamento';
       const dedup = `${desc}|${qtd}|${vUnit}|${vTotal}`;
@@ -115,10 +150,11 @@ async function processarItensSync(obraId, dadosSintetico, createdBy) {
         descricao: desc,
         unidade: it.und || it.unidade || it.UND || 'UN',
         quantidade: qtd,
-        custo_unitario: vUnit,
+        custo_unitario: cUnit,
         valor_unitario: vUnit,
-        custo_total: vTotal,
+        custo_total: cTotal,
         valor_total: vTotal,
+        custo_origem: analise.modo.modo,
         etapa,
         etapa_codigo,
         trecho: it.trecho || '',
@@ -143,7 +179,16 @@ async function processarItensSync(obraId, dadosSintetico, createdBy) {
   if (itens_persistidos === 0) {
     return { ok: false, itens_parseados, itens_persistidos: 0, orcamento_id: orc.id, erro: `Nenhum item foi persistido. ok=${ok} falha=${falha}` };
   }
-  return { ok: true, itens_parseados, itens_persistidos, orcamento_id: orc.id, totalOrcamento };
+  return {
+    ok: true,
+    itens_parseados,
+    itens_persistidos,
+    orcamento_id: orc.id,
+    totalOrcamento,
+    meta,
+    custo: analise.resumo,
+    custo_modo: analise.modo,
+  };
 }
 
 const erro = (message, status = 400, extra = {}) =>
@@ -261,12 +306,13 @@ export default async function finalizarImportacaoCompleta({ body, user }) {
 
   // 2. ORÇAMENTO PLANEJADO
   const normOrc = normalizeOrcamentoPayload(payload.dados_sintetico || {});
+  const metaSint = metaSintetico(payload.dados_sintetico || {});
   await store.create('OrcamentoPlanejado', {
     obra_id: obraId,
-    total_geral: payload.dados_sintetico.totalGeral || 0,
-    total_sem_bdi: payload.dados_sintetico.totalSemBDI || 0,
-    total_bdi: payload.dados_sintetico.totalBDI || 0,
-    bdi_percentual: payload.dados_sintetico.percentualBDI || 0,
+    total_geral: metaSint.total_geral,
+    total_sem_bdi: metaSint.total_sem_bdi,
+    total_bdi: metaSint.total_bdi,
+    bdi_percentual: metaSint.bdi_percent,
     estrutura_json: JSON.stringify({ ...payload.dados_sintetico, versao: normOrc.versao }),
     status: 'Ativo',
   }, createdBy);
@@ -373,6 +419,13 @@ export default async function finalizarImportacaoCompleta({ body, user }) {
     importada_orca_facil_em: new Date().toISOString(),
     total_orcamento: resultItens.totalOrcamento || 0,
   };
+  // BDI na obra: é ele que permite derivar custo de itens lançados depois da
+  // importação (aditivo, item digitado à mão) sem pedir o número de novo.
+  if (metaSint.bdi_percent > 0) atualizar.bdi_percentual = metaSint.bdi_percent;
+  if (resultItens.custo) {
+    atualizar.custo_previsto_total = resultItens.custo.total_custo;
+    atualizar.margem_prevista_percentual = resultItens.custo.margem_percentual;
+  }
   if (payload.dados_obra?.responsavel_tecnico) atualizar.responsavel_tecnico = payload.dados_obra.responsavel_tecnico;
   if (payload.dados_obra?.responsavel_obra) atualizar.responsavel_obra = payload.dados_obra.responsavel_obra;
   if (payload.dados_obra?.centro_custo_codigo) atualizar.centro_custo_codigo = payload.dados_obra.centro_custo_codigo;
@@ -390,5 +443,12 @@ export default async function finalizarImportacaoCompleta({ body, user }) {
     total_itens: resultItens.itens_persistidos,
     processados: resultItens.itens_persistidos,
     consolidacao_status_id: statusFinal?.id || null,
+    // Como o custo foi obtido e quanto do orçamento ele cobre. A tela de
+    // sucesso mostra isso: importar sem custo é silencioso demais para quem
+    // vai depender do desvio depois.
+    bdi_percentual: metaSint.bdi_percent,
+    custo: resultItens.custo || null,
+    custo_modo: resultItens.custo_modo?.modo || null,
+    custo_explicacao: resultItens.custo_modo?.explicacao || null,
   };
 }

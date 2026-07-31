@@ -35,6 +35,27 @@ const OBRA_WRITE_GATED = new Set([
 ]);
 router.use(requireAuth);
 
+// ───────────── Entidades que guardam SEGREDO ─────────────
+//
+// ChaveApi guarda a chave que autentica a instalação de cada cliente: com ela,
+// alguém se passa pelo sistema do cliente no heartbeat. IntegracaoExterna guarda
+// o token do WhatsApp, a chave da Asaas e a senha do SMTP — em texto puro,
+// porque o backend precisa usá-los.
+//
+// Sem esta trava, QUALQUER usuário do painel (um financeiro, um suporte) lia as
+// duas por /entities. Hoje só existe o admin, então não havia exposição prática;
+// no primeiro usuário com outro perfil, haveria. Segredo não é dado de trabalho:
+// é infraestrutura, e infraestrutura é do administrador.
+const ENTIDADES_SO_ADMIN = new Set(['ChaveApi', 'IntegracaoExterna']);
+
+router.use('/:name', (req, res, next) => {
+  if (!ENTIDADES_SO_ADMIN.has(req.params.name)) return next();
+  if (isSuperAdmin(req.user) || getRole(req.user) === 'admin') return next();
+  // 404 e não 403: para quem não é admin, estas entidades não existem. Dizer
+  // "existe mas você não pode" já entrega que há segredo ali.
+  return res.status(404).json({ error: 'not_found' });
+});
+
 // ───────────── Helpers ─────────────
 
 // row → { id, ...data, created_date, updated_date, created_by }
@@ -89,6 +110,10 @@ const ESCOPO_POR_EMPRESA = new Set([
   'Medicao', 'MedicaoObra', 'MedicaoContrato', 'BM',
   'DiarioObra',
   'ReceitaObra', 'RecebimentoPrevisto', 'LancamentoCustoObra',
+  // Controle de desvio (Fases 2 a 4): rateio do custo real por serviço, a
+  // justificativa mensal do desvio e o retrato congelado do mês fechado.
+  // Todos têm obra_id, então herdam a empresa da obra como os demais filhos.
+  'ApontamentoCustoServico', 'JustificativaDesvio', 'FechamentoObra',
   'NotaFiscal',
   'RequisicaoObra',
   'ApontamentoMaoObra',

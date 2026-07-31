@@ -115,10 +115,21 @@ export default function Orcamentos() {
   }, [itensOrcamento, analObra, analBusca]);
 
   const analTotais = useMemo(() => {
-    const custo = itensAnalitico.reduce((s, it) => s + num(it.custo_total ?? it.custo_unitario * it.quantidade), 0);
     const valor = itensAnalitico.reduce((s, it) => s + num(it.valor_total ?? it.valor_unitario * it.quantidade), 0);
-    const margem = valor > 0 ? ((valor - custo) / valor) * 100 : 0;
-    return { custo, valor, margem, qtd: itensAnalitico.length };
+    // Margem só sobre o que tem os dois lados. Item cujo custo é igual à venda
+    // (ou ausente) tem custo DESCONHECIDO, não margem zero: entrar na conta com
+    // custo zero daria 100% de lucro, e com custo = venda daria 0%. Nenhum dos
+    // dois é verdade, então esse item fica fora e a cobertura denuncia quantos são.
+    const comCusto = itensAnalitico.filter((it) => {
+      const c = num(it.custo_total ?? it.custo_unitario * it.quantidade);
+      const v = num(it.valor_total ?? it.valor_unitario * it.quantidade);
+      return c > 0 && v > 0 && c < v * 0.9999;
+    });
+    const custo = comCusto.reduce((s, it) => s + num(it.custo_total ?? it.custo_unitario * it.quantidade), 0);
+    const valorComCusto = comCusto.reduce((s, it) => s + num(it.valor_total ?? it.valor_unitario * it.quantidade), 0);
+    const margem = valorComCusto > 0 ? ((valorComCusto - custo) / valorComCusto) * 100 : null;
+    const cobertura = valor > 0 ? (valorComCusto / valor) * 100 : 0;
+    return { custo, valor, margem, cobertura, qtd: itensAnalitico.length, qtdComCusto: comCusto.length };
   }, [itensAnalitico]);
 
   const {
@@ -359,7 +370,7 @@ export default function Orcamentos() {
             <Card className="bg-white border-gray-200"><CardContent className="pt-6"><div className="text-sm font-semibold text-gray-600">Itens</div><div className="text-2xl font-bold text-gray-900 mt-2 tabular-nums">{analTotais.qtd}</div></CardContent></Card>
             <Card className="bg-white border-gray-200"><CardContent className="pt-6"><div className="text-sm font-semibold text-gray-600">Custo Total</div><div className="text-xl sm:text-2xl font-bold text-blue-600 mt-2 tabular-nums leading-tight truncate"><span className="sm:hidden">{fmtBRLcompact(analTotais.custo)}</span><span className="hidden sm:inline">{fmtBRL(analTotais.custo)}</span></div></CardContent></Card>
             <Card className="bg-white border-gray-200"><CardContent className="pt-6"><div className="text-sm font-semibold text-gray-600">Valor Total</div><div className="text-xl sm:text-2xl font-bold text-emerald-600 mt-2 tabular-nums leading-tight truncate"><span className="sm:hidden">{fmtBRLcompact(analTotais.valor)}</span><span className="hidden sm:inline">{fmtBRL(analTotais.valor)}</span></div></CardContent></Card>
-            <Card className="bg-white border-gray-200"><CardContent className="pt-6"><div className="text-sm font-semibold text-gray-600">Margem</div><div className={cn('text-2xl font-bold mt-2 tabular-nums', analTotais.margem >= 0 ? 'text-green-600' : 'text-red-600')}>{analTotais.margem.toFixed(1)}%</div></CardContent></Card>
+            <Card className="bg-white border-gray-200"><CardContent className="pt-6"><div className="text-sm font-semibold text-gray-600">Margem</div><div className={cn('text-2xl font-bold mt-2 tabular-nums', analTotais.margem == null ? 'text-gray-400' : analTotais.margem >= 0 ? 'text-green-600' : 'text-red-600')}>{analTotais.margem == null ? '—' : `${analTotais.margem.toFixed(1)}%`}</div>{analTotais.margem != null && analTotais.cobertura < 99.5 && <div className="text-[11px] text-amber-600 mt-1">sobre {analTotais.cobertura.toFixed(0)}% do valor ({analTotais.qtdComCusto} de {analTotais.qtd} itens)</div>}</CardContent></Card>
           </div>
 
           {/* Filtros */}

@@ -1,7 +1,7 @@
 import { store } from '../entityStore.js';
 import { requirePermission } from '../rbac.js';
 import { podeAcessarObra } from '../escopoObra.js';
-import { custoMensalistaDaObra } from './maoObraCore.js';
+import { custoMensalistaDaObra, custoMensalistaPorApontamento } from './maoObraCore.js';
 import { custoFrotaDaObra } from './frotaCore.js';
 
 // DRE da obra (período opcional): receita prevista/realizada, custos por grupo,
@@ -59,13 +59,33 @@ export default async function getDreObra({ body, user }) {
     .filter((c) => c.status === 'pago' && dentro(String(c.data_pagamento || c.data_vencimento || '').slice(0, 10)));
   for (const c of cfPagas) addCusto(c.categoria, c.valor);
 
-  // Mão de obra: fallback para apontamentos aprovados se nenhuma fonte trouxe MO.
-  // (cobre o DIARISTA quando a conta a pagar da diária ainda não foi paga)
-  if (!custosGrupo['mao_obra']) {
+  // DIÁRIA aprovada que ainda não virou conta a pagar.
+  //
+  // A regra anterior só olhava para isto quando NENHUMA conta de mão de obra
+  // existia na obra: bastava uma conta qualquer para diárias legítimas serem
+  // descartadas em silêncio. A exclusão agora é por REGISTRO, usando o elo que
+  // já existe — a conta gerada pela aprovação guarda
+  // referencia_tipo='apontamento_mao_obra' apontando para o apontamento.
+  //
+  // Mensalista fica de fora daqui: o custo dele é derivado da folha logo abaixo,
+  // e somá-lo também neste bloco contaria duas vezes.
+  {
+    const contasDeApontamento = await store
+      .filter('ContaFinanceira', { obra_id, referencia_tipo: 'apontamento_mao_obra' }, undefined, 20000)
+      .catch(() => []);
+    const jaFaturado = new Set(contasDeApontamento.map((c) => String(c.referencia_id)));
+    const mensalistas = await custoMensalistaPorApontamento(obra_id, { de, ate }).catch(() => new Map());
+
     const aps = (await store.filter('ApontamentoMaoObra', { obra_id, status: 'APROVADO' }, '-data', 5000).catch(() => []))
-      .filter((a) => dentro(String(a.data || '').slice(0, 10)));
+      .filter((a) => dentro(String(a.data || '').slice(0, 10)))
+      .filter((a) => mensalistas.get(String(a.id)) == null)
+      .filter((a) => !jaFaturado.has(String(a.id)));
+
     const mo = r2(aps.reduce((s, a) => s + num(a.total ?? a.valor_diaria), 0));
-    if (mo > 0) { custosGrupo['mao_obra'] = mo; porCategoria['mao_de_obra'] = mo; }
+    if (mo > 0) {
+      custosGrupo['mao_obra'] = r2((custosGrupo['mao_obra'] || 0) + mo);
+      porCategoria['mao_de_obra'] = r2((porCategoria['mao_de_obra'] || 0) + mo);
+    }
   }
   // MENSALISTA: custo da folha (nível empresa) rateado para a obra pelas horas do
   // Ponto (horas × custo real da hora). Aditivo — apontamento de mensalista não tem

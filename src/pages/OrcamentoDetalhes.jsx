@@ -230,6 +230,27 @@ export default function OrcamentoDetalhes() {
   const valorTotalOrc = orcamento.valor_total || itens.reduce((s, i) => s + (i.valor_total || 0), 0) || 0;
   const denom = valorTotalOrc || 1;
 
+  // CUSTO PREVISTO — o que o orçamento diz que a obra deve custar, ao lado do
+  // que ela vai faturar. É a linha-base do controle de desvio: sem ela, medir
+  // avanço não produz "o que isto deveria ter custado".
+  //
+  // Um item só conta se o custo for MENOR que a venda. Custo igual à venda não
+  // é margem zero, é custo desconhecido — herança da importação antiga, que
+  // gravava o mesmo número nos dois campos. Somá-lo afundaria a margem do
+  // orçamento inteiro e faria uma obra saudável parecer no prejuízo.
+  const temCusto = (i) => {
+    const c = Number(i.custo_total) || 0;
+    const v = Number(i.valor_total) || 0;
+    return c > 0 && v > 0 && c < v * 0.9999;
+  };
+  const itensComCusto = itens.filter(temCusto);
+  const custoPrevisto = itensComCusto.reduce((s, i) => s + (Number(i.custo_total) || 0), 0);
+  const vendaComCusto = itensComCusto.reduce((s, i) => s + (Number(i.valor_total) || 0), 0);
+  const margemPrevista = vendaComCusto > 0 ? ((vendaComCusto - custoPrevisto) / vendaComCusto) * 100 : null;
+  // Quanto do orçamento tem custo conhecido. Abaixo de 100% a margem é real,
+  // porém parcial — e o cartão precisa dizer isso em vez de fingir cobertura total.
+  const coberturaCusto = valorTotalOrc > 0 ? (vendaComCusto / valorTotalOrc) * 100 : 0;
+
   // Dados para gráficos
   const distribuicaoCategoria = [
     { name: 'Materiais', value: orcamento.valor_total_materiais || 0 },
@@ -474,6 +495,41 @@ export default function OrcamentoDetalhes() {
         </Card>
       </div>
 
+      {/* Custo previsto x venda — a linha-base do controle de desvio.
+          Só aparece quando o orçamento traz custo próprio: orçamento sem custo
+          não deve exibir margem nenhuma, nem 0%, nem 100%. */}
+      {itensComCusto.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
+          <Card className="bg-blue-50 border-blue-200">
+            <CardContent className="p-3 sm:p-4">
+              <p className="text-blue-700 text-xs sm:text-sm mb-1">Custo Previsto</p>
+              <p className="text-gray-900 text-lg sm:text-xl font-bold truncate">{fmtBRL(custoPrevisto)}</p>
+              <p className="text-blue-600/70 text-[11px] mt-1">o que a obra deve custar</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-white border-gray-200">
+            <CardContent className="p-3 sm:p-4">
+              <p className="text-gray-500 text-xs sm:text-sm mb-1">Margem Prevista</p>
+              <p className={`text-lg sm:text-xl font-bold truncate ${margemPrevista >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {margemPrevista == null ? '—' : `${margemPrevista.toFixed(1)}%`}
+              </p>
+              <p className="text-gray-400 text-[11px] mt-1">{fmtBRL(vendaComCusto - custoPrevisto)} de resultado</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-white border-gray-200">
+            <CardContent className="p-3 sm:p-4">
+              <p className="text-gray-500 text-xs sm:text-sm mb-1">Cobertura do Custo</p>
+              <p className={`text-lg sm:text-xl font-bold truncate ${coberturaCusto >= 99.5 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {coberturaCusto.toFixed(0)}%
+              </p>
+              <p className="text-gray-400 text-[11px] mt-1">
+                {itensComCusto.length} de {itens.length} {itens.length === 1 ? 'item tem' : 'itens têm'} custo
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Tabs de Análise */}
       <Tabs defaultValue="distribuicao" className="w-full">
         <TabsList className="bg-gray-100 border border-gray-200 overflow-x-auto w-full h-auto flex-wrap">
@@ -689,6 +745,7 @@ export default function OrcamentoDetalhes() {
                     <TableHead className="text-gray-500 text-xs">Descrição</TableHead>
                     <TableHead className="text-gray-500 text-xs">Un</TableHead>
                     <TableHead className="text-gray-500 text-right text-xs">Qtd</TableHead>
+                    <TableHead className="text-gray-500 text-right text-xs hidden lg:table-cell">Custo Unit.</TableHead>
                     <TableHead className="text-gray-500 text-right text-xs hidden sm:table-cell">Unit.</TableHead>
                     <TableHead className="text-gray-500 text-right text-xs">Total</TableHead>
                     <TableHead className="text-gray-500 text-center text-xs">Ações</TableHead>
@@ -704,6 +761,11 @@ export default function OrcamentoDetalhes() {
                         <TableCell className="text-gray-900 text-xs truncate max-w-xs">{item.descricao}</TableCell>
                         <TableCell className="text-gray-500 text-xs">{item.unidade}</TableCell>
                         <TableCell className="text-gray-900 text-right text-xs">{item.quantidade}</TableCell>
+                        {/* Custo unitário: "—" quando desconhecido (custo igual
+                            à venda), para não passar por margem zero. */}
+                        <TableCell className="text-blue-700 text-right text-xs hidden lg:table-cell">
+                          {temCusto(item) ? fmtBRL(item.custo_unitario) : '—'}
+                        </TableCell>
                         <TableCell className="text-gray-900 text-right text-xs hidden sm:table-cell">
                           {fmtBRL(item.valor_unitario)}
                         </TableCell>
@@ -736,7 +798,7 @@ export default function OrcamentoDetalhes() {
                       </TableRow>
                       {itemCotacoes?.id === item.id && (
                         <TableRow className="border-gray-200">
-                          <TableCell colSpan={7} className="p-4 bg-gray-50">
+                          <TableCell colSpan={8} className="p-4 bg-gray-50">
                             <CotacoesItem
                               itemId={item.id}
                               valorOrcado={item.valor_unitario}

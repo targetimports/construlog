@@ -11,15 +11,61 @@ export default async function recalcContratoVersao({ body }) {
   const versao = (await store.filter('ContratoVersao', { id: contrato_versao_id }))[0];
   if (!versao) throw Object.assign(new Error('Versão de contrato não encontrada'), { status: 404 });
 
+  // BDI da obra: usado para dar custo previsto a item adicionado à mão. A tela
+  // /ContratoVersao cria o item direto pela API da entidade, informando só
+  // preço de venda — sem custo, esse item vira um buraco na linha-base e o
+  // desvio dele nunca aparece.
+  const obra = versao.obra_id ? (await store.filter('Obra', { id: versao.obra_id }))[0] : null;
+  const bdi = Number(obra?.bdi_percentual) || 0;
+
   const itens = (await store.filter('ContratoItem', { contrato_versao_id })) || [];
   let total = 0;
+  let completados = 0;
   for (const it of itens) {
     const qtd = Number(it.qtd_contrato) || 0;
     const preco = Number(it.preco_unit_com_bdi) || Number(it.preco_unit) || 0;
     const precoTotal = r2(qtd * preco);
     total += precoTotal;
+
+    const patch = {};
     if (precoTotal !== Number(it.preco_total) || precoTotal !== Number(it.total)) {
-      await store.update('ContratoItem', it.id, { preco_total: precoTotal, total: precoTotal }).catch(() => {});
+      patch.preco_total = precoTotal;
+      patch.total = precoTotal;
+    }
+    // Item criado pela tela não recebe obra_id. Sem ele o item fica fora do
+    // escopo por empresa e some dos relatórios que filtram por obra.
+    if (!it.obra_id && versao.obra_id) patch.obra_id = versao.obra_id;
+
+    // Custo previsto ausente. Duas formas de obtê-lo, na mesma ordem de
+    // confiança da importação do orçamento:
+    //
+    //  1. O formulário tem os dois preços e o "sem BDI" é menor que o "com BDI".
+    //     Então o sem BDI JÁ é o custo — está escrito, não se deduz.
+    //  2. Só há um preço: deriva do BDI da obra.
+    if (!(Number(it.custo_unit_previsto) > 0) && preco > 0) {
+      const semBdi = Number(it.preco_unit) || 0;
+      const comBdi = Number(it.preco_unit_com_bdi) || 0;
+      let custoUnit = 0;
+      let origem = null;
+
+      if (semBdi > 0 && comBdi > semBdi) {
+        custoUnit = r2(semBdi);
+        origem = 'contrato_sem_bdi';
+      } else if (bdi > 0) {
+        custoUnit = r2(preco / (1 + bdi / 100));
+        origem = 'bdi_obra';
+      }
+
+      if (custoUnit > 0) {
+        patch.custo_unit_previsto = custoUnit;
+        patch.custo_total_previsto = r2(custoUnit * qtd);
+        patch.custo_origem = origem;
+        completados += 1;
+      }
+    }
+
+    if (Object.keys(patch).length) {
+      await store.update('ContratoItem', it.id, patch).catch(() => {});
     }
   }
   total = r2(total);
@@ -41,5 +87,11 @@ export default async function recalcContratoVersao({ body }) {
     }
   }
 
-  return { ok: true, total_contrato: total, itens: itens.length, rascunhos_atualizados: rascunhosAtualizados };
+  return {
+    ok: true,
+    total_contrato: total,
+    itens: itens.length,
+    custos_completados: completados,
+    rascunhos_atualizados: rascunhosAtualizados,
+  };
 }

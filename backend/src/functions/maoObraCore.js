@@ -79,32 +79,39 @@ export function custosHora(colab, itemFolha, competencia) {
   return { horaBase, horaExtra, horasUteis };
 }
 
-export async function custoMensalistaDaObra(obra_id, { de, ate } = {}) {
-  if (!obra_id) return 0;
+/**
+ * Mesma conta, porém DEVOLVIDA POR APONTAMENTO em vez de somada.
+ *
+ * O total da obra não basta para o controle de desvio: para dizer que o
+ * pedreiro custou tanto NA FUNDAÇÃO é preciso o valor de cada apontamento
+ * isoladamente. Esta é a fonte; `custoMensalistaDaObra` passou a ser a soma
+ * dela, para as duas nunca divergirem.
+ */
+export async function custoMensalistaPorApontamento(obra_id, { de, ate } = {}) {
+  const mapa = new Map();
+  if (!obra_id) return mapa;
   const dentro = (d) => (!de || (d && d >= de)) && (!ate || (d && d <= ate));
 
   const aps = ((await store.filter('ApontamentoMaoObra', { obra_id }, undefined, 100000)) || [])
     .filter((a) => !STATUS_FORA.has(String(a.status || '').toUpperCase()))
     .filter((a) => dentro(String(a.data || '').slice(0, 10)))
     .filter((a) => num(a.horas_normais) + num(a.horas_extra) > 0);
-  if (aps.length === 0) return 0;
+  if (aps.length === 0) return mapa;
 
   const ids = [...new Set(aps.map((a) => a.profissional_id || a.colaborador_id).filter(Boolean))];
-  if (ids.length === 0) return 0;
+  if (ids.length === 0) return mapa;
   const colabs = (await store.filter('Colaborador', { id: { $in: ids } }, undefined, 1000)) || [];
   const colabById = Object.fromEntries(colabs.map((c) => [c.id, c]));
 
-  // Custo total do mês por colaborador, vindo da folha da competência.
   const comps = new Set(aps.map((a) => String(a.data || '').slice(0, 7)).filter(Boolean));
   const folhas = ((await store.filter('FolhaPagamento', {}, undefined, 2000)) || [])
     .filter((f) => f.status !== 'cancelada' && comps.has(String(f.competencia || '')));
-  const itemMes = {}; // `${competencia}:${colaborador_id}` -> item da folha
+  const itemMes = {};
   for (const f of folhas) {
     const itens = (await store.filter('FolhaPagamentoItem', { folha_id: f.id }, undefined, 5000)) || [];
     for (const it of itens) itemMes[`${f.competencia}:${it.colaborador_id}`] = it;
   }
 
-  let total = 0;
   for (const a of aps) {
     const cid = a.profissional_id || a.colaborador_id;
     const colab = colabById[cid];
@@ -113,7 +120,19 @@ export async function custoMensalistaDaObra(obra_id, { de, ate } = {}) {
 
     const comp = String(a.data || '').slice(0, 7);
     const { horaBase, horaExtra } = custosHora(colab, itemMes[`${comp}:${cid}`], comp);
-    total += num(a.horas_normais) * horaBase + num(a.horas_extra) * horaExtra;
+    const v = r2(num(a.horas_normais) * horaBase + num(a.horas_extra) * horaExtra);
+    if (v > 0) mapa.set(String(a.id), v);
   }
+  return mapa;
+}
+
+// Soma do mapa acima. Uma fonte só: se o detalhe por apontamento e o total da
+// obra fossem calculados separadamente, um dia divergiriam — e a DRE deixaria de
+// bater com o relatório de desvio sem que ninguém percebesse.
+export async function custoMensalistaDaObra(obra_id, opts = {}) {
+  if (!obra_id) return 0;
+  const mapa = await custoMensalistaPorApontamento(obra_id, opts);
+  let total = 0;
+  for (const v of mapa.values()) total += v;
   return r2(total);
 }

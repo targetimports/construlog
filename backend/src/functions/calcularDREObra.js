@@ -1,6 +1,5 @@
 import { store } from '../entityStore.js';
-import { custoMensalistaDaObra } from './maoObraCore.js';
-import { custoFrotaDaObra } from './frotaCore.js';
+import { custoRealDaObra } from './custoServicoCore.js';
 
 // Calcula a DRE da obra (receitas, custos por categoria, lucro, margem) a partir
 // dos dados reais e PERSISTE em DREObra (upsert). Alimenta o Dashboard Financeiro
@@ -10,8 +9,9 @@ import { custoFrotaDaObra } from './frotaCore.js';
 //   contratada = valor_contrato/orçado da obra
 //   faturada   = medido acumulado das BMs aprovadas (ou obra.valor_realizado)
 //   recebida   = recebimentos previstos com status RECEBIDO
-// Custos realizados (LancamentoCustoObra por categoria); mão de obra cai para
-//   ApontamentoMaoObra aprovado se não houver lançamento.
+// Custos realizados: vêm inteiros de custoRealDaObra (conta a pagar paga,
+//   lançamento de custo, mão de obra do Ponto e frota devolvida), classificados
+//   por categoria. Mesma fonte do relatório de desvio, por construção.
 
 const num = (v) => Number(v) || 0;
 const r2 = (n) => Math.round(num(n) * 100) / 100;
@@ -36,41 +36,21 @@ export default async function calcularDREObra({ body, user }) {
   const receitaContratada = num(obra.valor_contrato) || num(obra.valor_orcado) || num(obra.total_orcamento);
 
   // ── Custos realizados ─────────────────────────────────────────────────
-  // Fonte ÚNICA (igual getDreObra): LancamentoCustoObra (legado) + ContaFinanceira
-  // pagar/PAGO (compras de material, serviços, equipamento, etc.). Antes esta função
-  // lia só LancamentoCustoObra (vazio) → material aparecia 0, divergindo do relatório.
-  let mat = 0, mo = 0, equip = 0, comb = 0, ind = 0;
-  const addCusto = (categoria, valor) => {
-    const v = num(valor);
-    const c = String(categoria || '').toLowerCase();
-    // Combustível ANTES de equipamento: custo de operação em linha própria, separado
-    // do custo de posse da máquina (ver getDreObra.js).
-    if (c.includes('combust') || c.includes('diesel') || c.includes('gasolina') || c.includes('arla')) comb += v;
-    else if (c.includes('material')) mat += v;
-    else if (c.includes('mao') || c.includes('mão')) mo += v;
-    else if (c.includes('equip') || c.includes('locac') || c.includes('aluguel')) equip += v;
-    else ind += v;
-  };
-
-  const lcs = await store.filter('LancamentoCustoObra', { obra_id }, '-data_lancamento', 5000).catch(() => []);
-  for (const l of lcs) addCusto(l.categoria, l.valor);
-
-  const cfPagas = (await store.filter('ContaFinanceira', { obra_id, tipo: 'pagar' }, '-data_pagamento', 20000).catch(() => []))
-    .filter((c) => c.status === 'pago');
-  for (const c of cfPagas) addCusto(c.categoria, c.valor);
-
-  // Mão de obra: fallback para apontamentos aprovados só se nenhuma fonte trouxe MO.
-  // (cobre o DIARISTA quando a conta a pagar da diária ainda não foi paga)
-  if (mo === 0) {
-    const aps = await store.filter('ApontamentoMaoObra', { obra_id, status: 'APROVADO' }, '-data', 5000).catch(() => []);
-    mo = aps.reduce((s, a) => s + num(a.total ?? a.valor_diaria), 0);
-  }
-  // MENSALISTA: o custo dele está na folha (nível empresa) e nunca chegava na obra.
-  // Soma a parte proporcional às horas apontadas no Ponto (horas × custo real da hora).
-  // Aditivo e sem dobra: apontamento de mensalista não tem valor nem conta a pagar.
-  mo += await custoMensalistaDaObra(obra_id).catch(() => 0);
-  // FROTA: uso de ativo do grupo, rateado (não vira conta a pagar) — ver frotaCore.js.
-  equip += await custoFrotaDaObra(obra_id).catch(() => 0);
+  // FONTE ÚNICA: custoRealDaObra (custoServicoCore.js), a mesma que o controle
+  // de desvio usa. Antes esta função repetia a conta por fora, e as duas
+  // divergiam sem que ninguém percebesse — a DRE contava mensalista e frota, o
+  // relatório de desvio não, e a obra parecia mais barata de um lado que do
+  // outro. Uma conta só, dois leitores.
+  //
+  // A classificação por categoria é a mesma de antes (combustível em linha
+  // própria, separado do custo de posse da máquina); mudou apenas quem calcula.
+  const real = await custoRealDaObra(obra_id);
+  const cat = real.por_categoria || {};
+  const mat = num(cat.material);
+  const mo = num(cat.mao_de_obra);
+  const equip = num(cat.equipamento);
+  const comb = num(cat.combustivel);
+  const ind = num(cat.indireto);
 
   const custoTotal = r2(mat + mo + equip + comb + ind);
   const lucroBruto = r2(receitaFaturada - custoTotal);
