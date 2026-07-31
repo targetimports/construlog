@@ -22,12 +22,14 @@ import { ERP_ATIVO, ROTA_POS_LOGIN } from '@/config/modulos';
 import LayoutPainel from '@/components/painel/LayoutPainel';
 import PainelInicio from '@/pages/PainelInicio';
 import PainelClientes from '@/pages/PainelClientes';
+import PainelInteressados from '@/pages/PainelInteressados';
 import PainelPagamentos from '@/pages/PainelPagamentos';
 import PainelIntegracoesClientes from '@/pages/PainelIntegracoesClientes';
 import PainelCobrancas from '@/pages/PainelCobrancas';
 import PainelUsuarios from '@/pages/PainelUsuarios';
 import PainelApi from '@/pages/PainelApi';
 import PainelRelatoriosIntegracoes from '@/pages/PainelRelatoriosIntegracoes';
+import PainelIntegracoesExternas from '@/pages/PainelIntegracoesExternas';
 // >>> BACKOFFICE
 import BloqueioLicenca, { useLicenca } from '@/components/licenca/BloqueioLicenca';
 import ConfiguracaoInicial from '@/components/instalacao/ConfiguracaoInicial';
@@ -136,11 +138,13 @@ const AuthenticatedApp = () => {
       {/* <<< BACKOFFICE — PAINEL DO FORNECEDOR (sai no pacote do cliente) */}
       <Route path="/PainelInicio" element={<LayoutPainel><PainelInicio /></LayoutPainel>} />
       <Route path="/PainelClientes" element={<LayoutPainel><PainelClientes /></LayoutPainel>} />
+      <Route path="/PainelInteressados" element={<LayoutPainel><PainelInteressados /></LayoutPainel>} />
       <Route path="/PainelPagamentos" element={<LayoutPainel><PainelPagamentos /></LayoutPainel>} />
       <Route path="/PainelIntegracoesClientes" element={<LayoutPainel><PainelIntegracoesClientes /></LayoutPainel>} />
       <Route path="/PainelCobrancas" element={<LayoutPainel><PainelCobrancas /></LayoutPainel>} />
       <Route path="/PainelUsuarios" element={<LayoutPainel><PainelUsuarios /></LayoutPainel>} />
       <Route path="/PainelApi" element={<LayoutPainel><PainelApi /></LayoutPainel>} />
+      <Route path="/PainelIntegracoesExternas" element={<LayoutPainel><PainelIntegracoesExternas /></LayoutPainel>} />
       <Route path="/PainelRelatoriosIntegracoes" element={<LayoutPainel><PainelRelatoriosIntegracoes /></LayoutPainel>} />
       {/* >>> BACKOFFICE */}
 

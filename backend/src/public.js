@@ -7,20 +7,44 @@ const router = express.Router();
 
 // Estatísticas públicas para a landing (sem auth). Apenas contagens, sem dados
 // sensíveis. Ex.: número real de clientes cadastrados.
+// NÚMEROS DA LANDING — o que o produto tem, somado, e não o que este servidor tem.
+//
+// Antes isto contava as entidades Cliente e Obra do ERP. Fazia sentido quando a
+// landing era o site de UMA construtora; no painel do fornecedor essas tabelas
+// estão vazias por natureza (o back-office não gerencia obras), então a seção
+// mostrava zero em tudo.
+//
+// A fonte certa são as métricas que cada instalação reporta no heartbeat
+// (InstanciaCliente.metricas): somadas, dão o tamanho real da plataforma.
+//
+// Não há número inventado aqui: se não houver instalação reportando, volta zero
+// e a landing esconde a seção.
 router.get('/stats', async (_req, res) => {
   try {
-    const [clientes, obras] = await Promise.all([
-      store.filter('Cliente', {}, null, 100000).catch(() => []),
-      store.filter('Obra', {}, null, 100000).catch(() => []),
+    const [assinantes, instancias] = await Promise.all([
+      store.filter('ClienteSaaS', {}, null, 1000).catch(() => []),
+      store.filter('InstanciaCliente', {}, null, 1000).catch(() => []),
     ]);
-    const valorObras = (obras || []).reduce((s, o) => s + (Number(o.total_orcamento) || 0), 0);
+
+    // Contrato cancelado não é cliente acompanhado.
+    const clientes = (assinantes || []).filter((c) => c.status !== 'cancelado').length;
+
+    const soma = (campo) => (instancias || []).reduce(
+      (s, i) => s + (Number(i?.metricas?.[campo]) || 0),
+      0,
+    );
+
     res.json({
-      clientes: (clientes || []).length,
-      obras: (obras || []).length,
-      valorObras,
+      clientes,
+      obras: soma('obras_total'),
+      obrasAtivas: soma('obras_ativas'),
+      usuarios: soma('usuarios_total'),
+      // Valor sob gestão: soma dos contratos das obras de TODAS as instalações.
+      // É um total agregado — não expõe cliente nem obra individual.
+      valorObras: soma('valor_obras'),
     });
   } catch {
-    res.json({ clientes: 0, obras: 0, valorObras: 0 });
+    res.json({ clientes: 0, obras: 0, obrasAtivas: 0, usuarios: 0, valorObras: 0 });
   }
 });
 
@@ -65,6 +89,11 @@ router.get('/branding', async (_req, res) => {
   }
 });
 
+// Planos aceitos no formulário de contato. Espelha src/lib/planos.js — o backend
+// não importa código do front, então a lista se repete aqui de propósito; mudar
+// os planos pede mexer nos dois lugares.
+const PLANOS_VALIDOS = new Set(['Essencial', 'Construtora', 'Corporativo']);
+
 const escapeHtml = (s) => String(s || '').replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
 ));
@@ -98,18 +127,53 @@ router.post('/contato', limiteContato, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'tamanho_excedido' });
     }
 
+    // GRAVA ANTES DE ENVIAR.
+    //
+    // Antes este endpoint só mandava e-mail: sem SMTP configurado (ou com o
+    // provedor fora do ar), o contato do interessado desaparecia em silêncio —
+    // alguém com intenção de comprar, perdido. Agora o registro vem primeiro e
+    // o e-mail é só a notificação; se ele falhar, o interessado continua na
+    // fila em Clientes › Interessados.
+    let interessado = null;
+    try {
+      interessado = await store.create('Interessado', {
+        nome,
+        email,
+        mensagem,
+        // Só aceita nome de plano conhecido. O campo vem de um <select>, mas
+        // quem chama a API pode mandar qualquer coisa — e plano inventado
+        // sujaria o filtro do painel e a sugestão de preço na conversão.
+        plano_interesse: PLANOS_VALIDOS.has(String(req.body?.plano || '').trim())
+          ? String(req.body.plano).trim()
+          : null,
+        origem: 'landing',
+        status: 'novo',
+        recebido_em: new Date().toISOString(),
+      });
+    } catch (e) {
+      // Falha ao gravar não pode impedir a notificação: melhor o e-mail chegar
+      // sozinho do que o visitante ver erro e desistir.
+      console.error('[contato] não consegui registrar o interessado:', e?.message);
+    }
+
     const destino = process.env.EMAIL_CONTATO || process.env.EMAIL_REMETENTE || 'contato@construlog.com.br';
     const html = `<h2>Novo contato pelo site</h2>
       <p><strong>Nome:</strong> ${escapeHtml(nome)}</p>
       <p><strong>E-mail:</strong> ${escapeHtml(email)}</p>
+      <p><strong>Plano de interesse:</strong> ${escapeHtml(interessado?.plano_interesse || 'não informado')}</p>
       <p><strong>Mensagem:</strong></p>
       <p>${escapeHtml(mensagem).replace(/\n/g, '<br>')}</p>`;
 
     // reply_to = e-mail do visitante, para responder direto.
     // Sem RESEND_API_KEY o sendEmail retorna { ok:true, stubbed:true } (só loga).
     const r = await sendEmail({ to: destino, subject: `Contato do site — ${nome}`, html, reply_to: email });
+
+    // Se o registro foi gravado, a mensagem NÃO se perdeu — então o visitante vê
+    // sucesso mesmo que o e-mail falhe. Só devolve erro quando não há registro
+    // nem notificação: aí sim a mensagem sumiu e ele precisa saber.
     if (r && r.ok === false) {
-      return res.status(502).json({ ok: false, error: 'falha_envio' });
+      console.error('[contato] falha no e-mail de notificação:', r.error);
+      if (!interessado) return res.status(502).json({ ok: false, error: 'falha_envio' });
     }
     return res.json({ ok: true });
   } catch {

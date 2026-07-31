@@ -30,7 +30,7 @@ export default function PageNotFound() {
             className="bg-blue-600 hover:bg-blue-700 gap-2"
           >
             <Home className="w-4 h-4" />
-            Ir para Home
+            Ir para o Início
           </Button>
         </div>
       </div>

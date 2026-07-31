@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowRight, Check, Mail, MessageCircle } from 'lucide-react';
+import { PLANOS } from '@/lib/planos';
 
 // BLOCO DE CONTATO — duas colunas: promessa à esquerda, formulário à direita.
 //
@@ -7,18 +8,28 @@ import { ArrowRight, Check, Mail, MessageCircle } from 'lucide-react';
 // modal que abre pelos botões dos planos. Assim o texto, a validação e o envio
 // não divergem entre as duas portas.
 //
-// `plano` (opcional) só pré-preenche a mensagem — quem clicou em "Falar com
-// especialista" no cartão Construtora não devia ter que digitar isso de novo.
+// `plano` (opcional) pré-seleciona o campo de plano — quem clicou em "Falar com
+// especialista" no cartão Construtora já chega com ele escolhido.
+//
+// O PLANO É UM CAMPO, não texto na mensagem. Antes ele vinha pré-escrito no corpo
+// ("Tenho interesse no plano X"), e bastava o visitante apagar aquilo e escrever
+// outra coisa para a informação se perder — no painel, ninguém saberia por qual
+// plano ele chegou. Como campo, o dado é estruturado: dá para filtrar, priorizar
+// e já sugerir o preço de tabela na hora de cadastrar o cliente.
 export default function BlocoContato({ contato = {}, plano = null, onEnviado }) {
-  const [form, setForm] = useState({ nome: '', email: '', mensagem: '' });
+  const [form, setForm] = useState({ nome: '', email: '', mensagem: '', plano: plano || '' });
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [erros, setErros] = useState({});
 
+  // Abrir o modal por um cartão de plano seleciona aquele plano. Só sobrescreve
+  // enquanto o visitante não escolheu outro à mão.
   useEffect(() => {
     if (!plano) return;
-    setForm((f) => (f.mensagem ? f : { ...f, mensagem: `Tenho interesse no plano ${plano}. ` }));
+    setForm((f) => (f.plano ? f : { ...f, plano }));
   }, [plano]);
+
+  const planoEscolhido = PLANOS.find((p) => p.nome === form.plano) || null;
 
   const setCampo = (k, v) => {
     setForm((f) => ({ ...f, [k]: v }));
@@ -44,12 +55,13 @@ export default function BlocoContato({ contato = {}, plano = null, onEnviado }) 
           nome: form.nome.trim(),
           email: form.email.trim(),
           mensagem: form.mensagem.trim(),
+          plano: form.plano || undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.ok) {
         setEnviado(true);
-        setForm({ nome: '', email: '', mensagem: '' });
+        setForm({ nome: '', email: '', mensagem: '', plano: plano || '' });
         onEnviado?.();
       } else if (res.status === 429) {
         setErros({ geral: 'Muitas tentativas. Aguarde um instante e tente de novo.' });
@@ -81,11 +93,9 @@ export default function BlocoContato({ contato = {}, plano = null, onEnviado }) 
           orçamento parecido com o seu e você decide sem compromisso.
         </p>
 
-        {plano && (
-          <p className="mt-5 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3.5 py-1.5 text-sm font-medium text-blue-700">
-            Plano {plano}
-          </p>
-        )}
+        {/* A etiqueta "Plano X" saiu daqui: o plano agora é um campo do
+            formulário, e repetir a informação dos dois lados só divide a
+            atenção sobre qual das duas manda. */}
 
         <div className="mt-8 space-y-3">
           {contato.whatsapp && (
@@ -160,6 +170,39 @@ export default function BlocoContato({ contato = {}, plano = null, onEnviado }) 
                 className={campo(erros.email)}
               />
               {erros.email && <p className="mt-1 text-xs text-red-500">{erros.email}</p>}
+            </div>
+
+            {/* PLANO — campo, não texto na mensagem. O preço de tabela aparece
+                junto para o visitante saber de onde parte a conversa. */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Plano de interesse
+              </label>
+              <select
+                value={form.plano}
+                onChange={(e) => setCampo('plano', e.target.value)}
+                className={`${campo(false)} bg-white appearance-none pr-10 cursor-pointer`}
+                style={{
+                  backgroundImage: 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%239ca3af\' stroke-width=\'2\'><path d=\'M6 9l6 6 6-6\'/></svg>")',
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 0.9rem center',
+                  backgroundSize: '1.1rem',
+                }}
+              >
+                <option value="">Ainda não sei — quero orientação</option>
+                {PLANOS.map((p) => (
+                  <option key={p.nome} value={p.nome}>
+                    {p.nome} — {p.preco}{p.periodo}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-xs text-gray-400">
+                {planoEscolhido
+                  ? (planoEscolhido.valor
+                    ? `${planoEscolhido.preco}${planoEscolhido.periodo} — ${planoEscolhido.resumo}`
+                    : `${planoEscolhido.preco} — ${planoEscolhido.resumo}`)
+                  : 'Sem problema: a gente indica o plano na conversa.'}
+              </p>
             </div>
 
             <div>

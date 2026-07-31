@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Building2, Plus, Search, Pencil, Users, CheckCircle2, PauseCircle, XCircle } from 'lucide-react';
+import { Building2, Plus, Search, Pencil, Users, CheckCircle2, PauseCircle, XCircle, ShieldAlert } from 'lucide-react';
 import Pagination from '@/components/shared/Pagination';
 import { usePagination } from '@/components/shared/usePagination';
 import { TableSkeleton } from '@/components/shared/Skeletons';
@@ -32,9 +32,19 @@ const VAZIO = {
   nome: '', cnpj: '', responsavel: '', email: '', telefone: '',
   plano: 'Construtora', valor_mensal: '', dia_vencimento: 10,
   status: 'teste', inicio: new Date().toISOString().slice(0, 10), observacoes: '',
+  // Aviso de vencimento por e-mail: desligado por padrão. E-mail sai em nome do
+  // fornecedor para um terceiro — quem liga é quem conhece o combinado com o
+  // cliente, não um default nosso.
+  cobranca_email: false,
+  cobranca_whatsapp: false,
 };
 
 const soDigitos = (v) => String(v || '').replace(/\D/g, '');
+
+// Status que fazem o painel NEGAR autorização no heartbeat — ou seja, que
+// derrubam o sistema do cliente. Espelha a regra de backend/src/integracao.js
+// (avaliarAutorizacao); mexer lá pede mexer aqui.
+const STATUS_QUE_BLOQUEIA = new Set(['suspenso', 'cancelado']);
 
 export default function PainelClientes() {
   const qc = useQueryClient();
@@ -44,10 +54,17 @@ export default function PainelClientes() {
   const [editando, setEditando] = useState(null);
   const [form, setForm] = useState(VAZIO);
   const [errors, setErrors] = useState({});
+  const [confirmarStatus, setConfirmarStatus] = useState(null); // { dados, instancia }
 
   const { data: clientes = [], isLoading } = useQuery({
     queryKey: ['clientes-saas'],
     queryFn: () => base44.entities.ClienteSaaS.list('-created_date', 500).catch(() => []),
+  });
+  // Instâncias: precisamos saber se este cliente tem sistema RODANDO antes de
+  // deixar alguém mudar o status para um valor que derruba o acesso.
+  const { data: instancias = [] } = useQuery({
+    queryKey: ['instancias-cliente'],
+    queryFn: () => base44.entities.InstanciaCliente.list('-created_date', 500).catch(() => []),
   });
 
   const set = (k, v) => {
@@ -97,6 +114,15 @@ export default function PainelClientes() {
 
     if (!form.inicio) e.inicio = 'Informe o início do contrato';
 
+    // Aviso ligado sem e-mail é promessa que o sistema não cumpre: ninguém
+    // receberia nada e não haveria erro visível em lugar nenhum.
+    if (form.cobranca_email && !String(form.email || '').trim()) {
+      e.email = 'Informe o e-mail para poder avisar o cliente do vencimento';
+    }
+    if (form.cobranca_whatsapp && !String(form.telefone || '').trim()) {
+      e.telefone = 'Informe o telefone para poder cobrar por WhatsApp';
+    }
+
     // CNPJ repetido = cliente cadastrado duas vezes, com cobrança duplicada.
     if (cnpj) {
       const dup = clientes.some((c) => c.id !== editando?.id && soDigitos(c.cnpj) === cnpj);
@@ -109,12 +135,35 @@ export default function PainelClientes() {
 
   const handleSalvar = () => {
     if (!validar()) { toast.error('Verifique os campos destacados.'); return; }
-    salvar.mutate({
+
+    const dados = {
       ...form,
       cnpj: form.cnpj.trim(),
       valor_mensal: Number(form.valor_mensal),
       dia_vencimento: Number(form.dia_vencimento),
-    });
+      cobranca_email: !!form.cobranca_email,
+      cobranca_whatsapp: !!form.cobranca_whatsapp,
+    };
+
+    // MUDANÇA DE STATUS QUE DERRUBA O CLIENTE.
+    //
+    // "suspenso" e "cancelado" fazem o heartbeat negar autorização: o sistema do
+    // cliente para de funcionar em até 30s. Editar isso num <select>, com o mesmo
+    // gesto de corrigir um telefone, é desproporcional à consequência — então
+    // pede a mesma confirmação do cadeado em Integrações.
+    //
+    // Só pergunta quando há instância registrada: cliente sem sistema no ar não
+    // tem nada para derrubar, e a pergunta ali seria só atrito.
+    const instancia = instancias.find((i) => i.cliente_id === editando?.id) || null;
+    const derruba = STATUS_QUE_BLOQUEIA.has(dados.status);
+    const antesEstavaLiberado = editando && !STATUS_QUE_BLOQUEIA.has(editando.status);
+
+    if (editando && derruba && antesEstavaLiberado && instancia) {
+      setConfirmarStatus({ dados, instancia });
+      return;
+    }
+
+    salvar.mutate(dados);
   };
 
   const filtrados = useMemo(() => {
@@ -408,8 +457,73 @@ export default function PainelClientes() {
                       {Object.entries(STATUS).map(([k, s]) => <SelectItem key={k} value={k}>{s.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                  {/* A consequência aparece já na escolha, não só na confirmação:
+                      quem está editando merece saber antes de clicar em Salvar. */}
+                  {STATUS_QUE_BLOQUEIA.has(form.status) && (
+                    <p className="text-xs text-red-600 mt-1.5 flex items-start gap-1.5">
+                      <ShieldAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                      Este status <strong>bloqueia o sistema do cliente</strong> no próximo
+                      heartbeat (até 30s).
+                    </p>
+                  )}
                 </div>
               </div>
+            </div>
+
+            {/* Avisos de vencimento — por onde este cliente aceita ser cobrado.
+                Cada canal é independente: dá para usar só um, os dois ou nenhum. */}
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                Avisos de cobrança
+              </p>
+              <p className="text-xs text-gray-500">
+                Um lembrete 3 dias antes de cada mensalidade vencer e, passado o prazo
+                sem pagamento, uma cobrança por dia até a baixa.
+              </p>
+
+              <label className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                form.cobranca_email ? 'border-blue-200 bg-blue-50/60' : 'border-gray-200 hover:bg-gray-50'
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={!!form.cobranca_email}
+                  onChange={(e) => set('cobranca_email', e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-gray-300 accent-blue-600"
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-gray-900">Por e-mail</span>
+                  <span className="block text-xs text-gray-500 mt-0.5">
+                    {form.email ? `Enviado para ${form.email}` : 'Enviado para o e-mail do cliente'}
+                  </span>
+                  {form.cobranca_email && !form.email && (
+                    <span className="block text-xs text-amber-700 mt-1">
+                      Informe o e-mail acima, senão não há para onde enviar.
+                    </span>
+                  )}
+                </span>
+              </label>
+
+              <label className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                form.cobranca_whatsapp ? 'border-emerald-200 bg-emerald-50/60' : 'border-gray-200 hover:bg-gray-50'
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={!!form.cobranca_whatsapp}
+                  onChange={(e) => set('cobranca_whatsapp', e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-gray-300 accent-emerald-600"
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-gray-900">Por WhatsApp</span>
+                  <span className="block text-xs text-gray-500 mt-0.5">
+                    {form.telefone ? `Enviado para ${form.telefone}` : 'Enviado para o telefone do cliente'}
+                  </span>
+                  {form.cobranca_whatsapp && !form.telefone && (
+                    <span className="block text-xs text-amber-700 mt-1">
+                      Informe o telefone acima, senão não há para onde enviar.
+                    </span>
+                  )}
+                </span>
+              </label>
             </div>
 
             <div>
@@ -422,6 +536,74 @@ export default function PainelClientes() {
             <Button variant="outline" onClick={() => setModal(false)} className="border-gray-300 text-gray-700">Cancelar</Button>
             <Button onClick={handleSalvar} disabled={salvar.isPending} className="bg-blue-600 hover:bg-blue-700">
               {salvar.isPending ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CONFIRMAÇÃO DE STATUS QUE DERRUBA O CLIENTE.
+          Mesma seriedade do cadeado em Integrações: diz o que vai acontecer,
+          quanta gente está trabalhando agora e o que o cliente vai ver. */}
+      <Dialog open={!!confirmarStatus} onOpenChange={(o) => { if (!o) setConfirmarStatus(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {confirmarStatus?.dados?.status === 'cancelado' ? 'Cancelar o contrato?' : 'Suspender o acesso?'}
+            </DialogTitle>
+          </DialogHeader>
+
+          {confirmarStatus && (
+            <div className="space-y-4">
+              <div className="flex items-start gap-2.5 rounded-lg border border-red-100 bg-red-50 px-3 py-3">
+                <ShieldAlert className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                <div className="text-sm text-red-800 space-y-1">
+                  <p>
+                    O sistema de <strong>{confirmarStatus.dados.nome}</strong> vai
+                    parar de funcionar em até 30 segundos.
+                  </p>
+                  {confirmarStatus.instancia?.metricas?.usuarios_online > 0 && (
+                    <p>
+                      Há <strong>{confirmarStatus.instancia.metricas.usuarios_online} usuário(s)</strong> trabalhando
+                      neste momento.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 space-y-1.5">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-400">O que o cliente vai ver</p>
+                <p className="text-sm text-gray-700">
+                  {confirmarStatus.dados.status === 'cancelado'
+                    ? '"Contrato encerrado."'
+                    : '"Contrato suspenso. Fale com o suporte."'}
+                </p>
+                <p className="text-xs text-gray-500">
+                  Instância: {confirmarStatus.instancia?.nome || '—'}
+                  {confirmarStatus.instancia?.url ? ` · ${confirmarStatus.instancia.url}` : ''}
+                </p>
+              </div>
+
+              <p className="text-xs text-gray-500">
+                Os dados do cliente ficam preservados. Voltar o status para Ativo
+                libera o acesso automaticamente, também em até 30 segundos.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmarStatus(null)}
+              className="border-gray-300 text-gray-700"
+            >
+              Voltar sem salvar
+            </Button>
+            <Button
+              onClick={() => { salvar.mutate(confirmarStatus.dados); setConfirmarStatus(null); }}
+              disabled={salvar.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {confirmarStatus?.dados?.status === 'cancelado' ? 'Cancelar contrato' : 'Suspender acesso'}
             </Button>
           </DialogFooter>
         </DialogContent>

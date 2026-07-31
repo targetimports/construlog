@@ -28,20 +28,66 @@ export async function getBranding() {
 //   1) SMTP (ex.: Hostinger/Titan) — ativa quando SMTP_HOST + SMTP_USER + SMTP_PASS estão setados.
 //   2) Resend — ativa quando RESEND_API_KEY está setado.
 //   3) Stub — sem config, apenas loga (não envia), pra não quebrar os fluxos.
+// A configuração vem da tela Sistema › Integrações externas, com o .env vencendo
+// quando definido lá. Antes era lida uma única vez, na importação do módulo: quem
+// configurasse o SMTP pelo painel só via efeito no próximo restart do servidor.
+// Agora resolve sob demanda e guarda em cache — `recarregarEmail()` derruba o
+// cache quando a tela salva, para valer na hora.
 const resendClient = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
-const smtpPort = Number(process.env.SMTP_PORT) || 465;
-const smtpTransport = (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
-  ? nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: smtpPort,
-      secure: smtpPort === 465, // 465 = SSL; 587 = STARTTLS
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    })
-  : null;
+let cache = null;      // { host, porta, usuario, senha, remetente }
+let transporte = null; // nodemailer, recriado quando a config muda
 
+/** Lê do banco (ou do .env, que tem precedência). */
+export async function carregarEmail() {
+  let v = {};
+  try {
+    const { configDe } = await import('./integracoesExternas.js');
+    v = (await configDe('email'))?.valores || {};
+  } catch {
+    // Banco fora do ar ou entidade ainda não migrada: cai no .env puro, para
+    // uma falha de leitura não deixar o sistema mudo.
+    v = {};
+  }
+
+  cache = {
+    host: v.host || process.env.SMTP_HOST || '',
+    porta: Number(v.porta || process.env.SMTP_PORT) || 465,
+    usuario: v.usuario || process.env.SMTP_USER || '',
+    senha: v.senha || process.env.SMTP_PASS || '',
+    remetente: v.remetente || process.env.EMAIL_REMETENTE || '',
+  };
+
+  transporte = (cache.host && cache.usuario && cache.senha)
+    ? nodemailer.createTransport({
+      host: cache.host,
+      port: cache.porta,
+      secure: cache.porta === 465, // 465 = SSL; 587 = STARTTLS
+      auth: { user: cache.usuario, pass: cache.senha },
+    })
+    : null;
+
+  return cache;
+}
+
+export function recarregarEmail() { cache = null; transporte = null; }
+
+const config = () => cache || {
+  host: process.env.SMTP_HOST || '',
+  porta: Number(process.env.SMTP_PORT) || 465,
+  usuario: process.env.SMTP_USER || '',
+  senha: process.env.SMTP_PASS || '',
+  remetente: process.env.EMAIL_REMETENTE || '',
+};
+
+/**
+ * Há remetente utilizável? Leitura síncrona do cache, porque o agendador chama
+ * isto a cada ciclo e não pode virar I/O. O cache é preenchido no boot.
+ */
 export function emailConfigured() {
-  return !!((smtpTransport || resendClient) && (process.env.EMAIL_REMETENTE || process.env.SMTP_USER));
+  const c = config();
+  const temSmtp = !!(c.host && c.usuario && c.senha);
+  return !!((temSmtp || resendClient) && (c.remetente || c.usuario));
 }
 
 // Envia um e-mail. Aceita html OU text/body (auto-detecta HTML).
@@ -50,23 +96,27 @@ export function emailConfigured() {
 export async function sendEmail({ to, subject, html, text, body, from, cc, bcc, reply_to } = {}) {
   if (!to || !subject) return { ok: false, error: 'to_and_subject_required' };
 
-  // Remetente: nome do branding + endereço autenticado (EMAIL_REMETENTE/SMTP_USER).
+  if (!cache) await carregarEmail();
+  const c = config();
+
+  // Remetente: nome do branding + endereço autenticado (remetente configurado ou
+  // o próprio usuário SMTP — o servidor só aceita enviar em nome de quem autenticou).
   let fromAddr = from;
   if (!fromAddr) {
-    const addr = extractAddr(process.env.EMAIL_REMETENTE) || process.env.SMTP_USER;
+    const addr = extractAddr(c.remetente) || c.usuario;
     let nome = '';
     try { nome = (await getBranding()).nome; } catch { /* ignore */ }
-    fromAddr = addr ? `${(nome || '').trim()} <${addr}>`.trim() : (process.env.EMAIL_REMETENTE || process.env.SMTP_USER);
+    fromAddr = addr ? `${(nome || '').trim()} <${addr}>`.trim() : (c.remetente || c.usuario);
   }
   const conteudo = html ?? body ?? text ?? '';
   const isHtml = html != null || (typeof conteudo === 'string' && /<[a-z][\s\S]*>/i.test(conteudo));
   const toList = Array.isArray(to) ? to : [to];
 
   // 1) SMTP (Hostinger etc.)
-  if (smtpTransport) {
-    if (!fromAddr) return { ok: false, error: 'remetente_ausente (defina EMAIL_REMETENTE ou SMTP_USER)' };
+  if (transporte) {
+    if (!fromAddr) return { ok: false, error: 'remetente_ausente (configure em Sistema › Integrações externas)' };
     try {
-      const info = await smtpTransport.sendMail({
+      const info = await transporte.sendMail({
         from: fromAddr,
         to: toList,
         subject,
@@ -98,7 +148,7 @@ export async function sendEmail({ to, subject, html, text, body, from, cc, bcc, 
   }
 
   // 3) Stub
-  console.log('[email:stub] to=%s subject="%s" (configure SMTP_* ou RESEND_API_KEY para envio real)',
+  console.log('[email:stub] to=%s subject="%s" (configure o SMTP em Sistema › Integrações externas)',
     toList.join(', '), subject);
   return { ok: true, stubbed: true };
 }

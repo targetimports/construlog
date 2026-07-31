@@ -13,7 +13,7 @@ import ComboboxBusca from '@/components/shared/ComboboxBusca';
 import Pagination from '@/components/shared/Pagination';
 import { usePagination } from '@/components/shared/usePagination';
 import { TableSkeleton } from '@/components/shared/Skeletons';
-import { Plus, Check, Receipt, CalendarPlus } from 'lucide-react';
+import { Plus, Check, Receipt, CalendarPlus, Mail, MailCheck, MessageCircle, FileText, RefreshCw, Copy, ExternalLink } from 'lucide-react';
 import { CabecalhoPagina, fmtBRL, fmtData, hojeISO } from '@/components/painel/ui';
 import { toast } from 'sonner';
 
@@ -51,6 +51,48 @@ const rotuloCompetencia = (comp) => {
   return `${nomes[Number(mes) - 1]}/${ano}`;
 };
 
+// Os canais de cobrança, do ponto de vista da tela. Os nomes de campo espelham
+// o que o backend grava por canal (backend/src/cobrancaAviso.js).
+const CANAIS_UI = [
+  {
+    chave: 'email', rotulo: 'E-mail', icone: MailCheck,
+    chaveCliente: 'cobranca_email', campoDestino: 'email',
+    campoPrevio: 'lembrete_enviado_em', campoAtraso: 'ultimo_aviso_atraso', campoContagem: 'avisos_atraso',
+  },
+  {
+    chave: 'whatsapp', rotulo: 'WhatsApp', icone: MessageCircle,
+    chaveCliente: 'cobranca_whatsapp', campoDestino: 'telefone',
+    campoPrevio: 'lembrete_zap_em', campoAtraso: 'ultimo_zap_atraso', campoContagem: 'zaps_atraso',
+  },
+];
+
+// Motivos que o backend devolve ao recusar o envio do aviso, em português.
+const MOTIVO_AVISO = {
+  email_nao_configurado: 'O e-mail (SMTP) não está configurado em Sistema › Integrações externas.',
+  whatsapp_nao_configurado: 'O WhatsApp não está configurado em Sistema › Integrações externas.',
+  nenhum_canal_configurado: 'Nenhum canal de envio configurado em Sistema › Integrações externas.',
+  aviso_desligado: 'Os avisos estão desligados no cadastro deste cliente.',
+  cliente_sem_destino: 'O cliente não tem o contato cadastrado para este canal.',
+  cliente_sem_email: 'O cliente não tem e-mail cadastrado.',
+  telefone_invalido: 'O telefone do cliente não está num formato válido.',
+  cobranca_nao_encontrada: 'Cobrança não encontrada.',
+  cliente_nao_encontrado: 'Cliente não encontrado.',
+  ja_paga: 'Esta cobrança já está paga.',
+  cancelada: 'Esta cobrança está cancelada.',
+};
+
+const NOME_CANAL = { email: 'e-mail', whatsapp: 'WhatsApp' };
+
+// Recusas do módulo de pagamento, em português.
+const MOTIVO_PAGAMENTO = {
+  modo_manual: 'A Asaas não está configurada em Sistema › Integrações externas.',
+  nao_emitida: 'Esta cobrança ainda não foi emitida na Asaas.',
+  ja_paga: 'Esta cobrança já está paga.',
+  cancelada: 'Esta cobrança está cancelada.',
+  cobranca_nao_encontrada: 'Cobrança não encontrada.',
+  cliente_nao_encontrado: 'Cliente não encontrado.',
+};
+
 // Quem entra na geração em lote e, principalmente, POR QUE alguém fica de fora.
 // Antes o lote só olhava status === 'ativo' e, sem ninguém elegível, dizia "já
 // estavam lançadas" — mentia sobre a causa. Agora cada exclusão tem motivo e
@@ -72,6 +114,9 @@ export default function PainelCobrancas() {
   const [lote, setLote] = useState(false); // tela de conferência da geração em lote
   const [compLote, setCompLote] = useState(competenciaAtual());
   const [incluirTeste, setIncluirTeste] = useState(false);
+  const [avisandoId, setAvisandoId] = useState(null); // cobrança tendo o aviso enviado
+  const [emitindoId, setEmitindoId] = useState(null); // cobrança sendo emitida na Asaas
+  const [meios, setMeios] = useState(null); // { cobranca, url_fatura, linha_digitavel, pix_copia_e_cola }
   const [baixa, setBaixa] = useState(null); // cobrança em baixa
   const [pagamento, setPagamento] = useState({ data_pagamento: hoje(), forma: 'pix' });
   const [errBaixa, setErrBaixa] = useState({});
@@ -167,6 +212,146 @@ export default function PainelCobrancas() {
 
   const abrirLote = () => { setCompLote(competenciaAtual()); setIncluirTeste(false); setLote(true); };
 
+  // PAGAMENTO ONLINE (Asaas) — a tela se adapta ao que está configurado.
+  //
+  // Sem chave da Asaas o modo é "manual" e nada disso aparece: mostrar "Emitir
+  // boleto" num painel que não fala com gateway nenhum seria prometer o que o
+  // sistema não faz. Quando a chave entrar em Integrações externas, os botões
+  // surgem sozinhos — sem release, sem ajuste de código.
+  const { data: modoPagamento } = useQuery({
+    queryKey: ['modo-pagamento'],
+    queryFn: () => base44.api('/pagamentos/status').catch(() => ({ modo: 'manual' })),
+    staleTime: 60_000,
+  });
+  const asaasLigada = modoPagamento?.modo === 'asaas';
+
+  const emitir = useMutation({
+    mutationFn: (id) => base44.api(`/pagamentos/cobrancas/${id}/emitir`, { method: 'POST', body: {} }),
+    onMutate: (id) => setEmitindoId(id),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['cobrancas-saas'] });
+      if (r?.ok) toast.success(r.jaEmitida ? 'Esta cobrança já estava emitida.' : 'Cobrança emitida na Asaas.');
+      else toast.error(MOTIVO_PAGAMENTO[r?.motivo] || r?.motivo || 'Não foi possível emitir.');
+    },
+    onError: (e) => toast.error('Falha ao emitir: ' + (e?.message || 'tente novamente')),
+    onSettled: () => setEmitindoId(null),
+  });
+
+  const conciliar = useMutation({
+    mutationFn: () => base44.api('/pagamentos/conciliar', { method: 'POST' }),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['cobrancas-saas'] });
+      if (!r?.ok) { toast.error(MOTIVO_PAGAMENTO[r?.motivo] || 'Conciliação indisponível.'); return; }
+      toast.success(r.baixadas
+        ? `${r.baixadas} pagamento(s) encontrado(s) e baixado(s).`
+        : `Nenhum pagamento novo (${r.verificadas} cobrança(s) conferida(s)).`);
+    },
+    onError: (e) => toast.error('Falha ao conciliar: ' + (e?.message || 'tente novamente')),
+  });
+
+  /** Abre boleto/Pix da cobrança para mandar ao cliente. */
+  const verMeios = async (c) => {
+    try {
+      const r = await base44.api(`/pagamentos/cobrancas/${c.id}/meios`);
+      if (!r?.ok) { toast.error(MOTIVO_PAGAMENTO[r?.motivo] || 'Meios de pagamento indisponíveis.'); return; }
+      setMeios({ cobranca: c, ...r });
+    } catch (e) {
+      toast.error('Erro: ' + (e?.message || 'tente novamente'));
+    }
+  };
+
+  // AVISO DE VENCIMENTO — o envio automático sai do agendador do backend (3 dias
+  // antes). Este botão é o disparo manual, para quando o operador quer mandar na
+  // hora. O backend respeita a chave do cliente nos dois caminhos.
+  const clientePorId = useMemo(
+    () => Object.fromEntries(clientes.map((c) => [c.id, c])),
+    [clientes],
+  );
+
+  const podeAvisar = (c) => {
+    const cli = clientePorId[c.cliente_id];
+    return (!!cli?.cobranca_email && !!cli?.email) || (!!cli?.cobranca_whatsapp && !!cli?.telefone);
+  };
+
+  const avisar = useMutation({
+    mutationFn: (id) => base44.api(`/pagamentos/cobrancas/${id}/avisar`, { method: 'POST' }),
+    onMutate: (id) => setAvisandoId(id),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['cobrancas-saas'] });
+      if (r?.ok) {
+        const canais = (r.enviados || []).map((c) => NOME_CANAL[c] || c).join(' e ');
+        toast.success(`${r.vencida ? 'Cobrança' : 'Lembrete'} enviado por ${canais}.`);
+        // Um canal pode ter falhado enquanto o outro saiu — avisa sem esconder.
+        const falhou = (r.resultados || []).filter((x) => !x.ok);
+        falhou.forEach((f) => toast.warning(
+          `${NOME_CANAL[f.canal] || f.canal}: ${MOTIVO_AVISO[f.motivo] || f.motivo}`,
+        ));
+      } else {
+        toast.error(MOTIVO_AVISO[r?.motivo] || r?.motivo || 'Não foi possível enviar o aviso.');
+      }
+    },
+    onError: (e) => toast.error('Falha ao enviar: ' + (e?.message || 'tente novamente')),
+    onSettled: () => setAvisandoId(null),
+  });
+
+  // Estado de UM canal na linha: enviado quando, quantas vezes, ou por que não.
+  const estadoCanal = (c, cli, cfg) => {
+    const ligado = !!cli?.[cfg.chaveCliente];
+    const destino = cli?.[cfg.campoDestino];
+    const Icone = cfg.icone;
+
+    if (!ligado) return null; // canal que o cliente não aceita não polui a linha
+
+    const atraso = c[cfg.campoAtraso];
+    const previo = c[cfg.campoPrevio];
+    const contagem = Number(c[cfg.campoContagem] || 0);
+
+    let texto; let cor; let corIcone;
+    if (atraso) {
+      const hojeMesmo = String(atraso).slice(0, 10) === hoje();
+      texto = hojeMesmo ? 'hoje' : fmtData(atraso);
+      cor = hojeMesmo ? 'text-gray-600' : 'text-amber-600';
+      corIcone = hojeMesmo ? 'text-emerald-600' : 'text-amber-500';
+    } else if (previo) {
+      texto = fmtData(previo);
+      cor = 'text-gray-600';
+      corIcone = 'text-emerald-600';
+    } else if (!destino) {
+      texto = 'sem contato';
+      cor = 'text-amber-600';
+      corIcone = 'text-amber-500';
+    } else {
+      texto = 'a enviar';
+      cor = 'text-gray-400';
+      corIcone = 'text-gray-300';
+    }
+
+    return (
+      <span
+        key={cfg.chave}
+        className={`inline-flex items-center gap-1 text-xs ${cor}`}
+        title={`${cfg.rotulo}${destino ? ` — ${destino}` : ''}${contagem > 1 ? ` · ${contagem} cobranças de atraso` : ''}`}
+      >
+        <Icone className={`w-3.5 h-3.5 ${corIcone}`} />
+        {texto}
+        {contagem > 1 && <span className="text-gray-400">({contagem}×)</span>}
+      </span>
+    );
+  };
+
+  /** Estado dos avisos na linha da tabela, um por canal aceito pelo cliente. */
+  const avisoDaCobranca = (c) => {
+    if (c.status === 'pago' || c.status === 'cancelado') return <span className="text-xs text-gray-300">—</span>;
+
+    const cli = clientePorId[c.cliente_id];
+    const linhas = CANAIS_UI.map((cfg) => estadoCanal(c, cli, cfg)).filter(Boolean);
+
+    if (!linhas.length) {
+      return <span className="text-xs text-gray-400" title="Ligue os avisos no cadastro do cliente">desligado</span>;
+    }
+    return <div className="flex flex-col gap-0.5">{linhas}</div>;
+  };
+
   const validar = () => {
     const e = {};
     if (!form.cliente_id) e.cliente_id = 'Selecione o cliente';
@@ -251,7 +436,21 @@ export default function PainelCobrancas() {
 
   return (
     <div className="space-y-6 pb-6">
-      <CabecalhoPagina subtitulo="Mensalidades dos clientes — controle manual">
+      <CabecalhoPagina subtitulo="Mensalidades dos clientes — aviso 3 dias antes do vencimento e cobrança diária em caso de atraso, para quem optar">
+        {/* Conciliar: rede de segurança para quando o webhook da Asaas se perder
+            (deploy, rede fora). Sem a Asaas ligada, o botão não existe. */}
+        {asaasLigada && (
+          <Button
+            variant="outline"
+            onClick={() => conciliar.mutate()}
+            disabled={conciliar.isPending}
+            className="gap-2 border-gray-300 text-gray-700"
+            title="Conferir na Asaas se há pagamentos que não chegaram por webhook"
+          >
+            <RefreshCw className={`w-4 h-4 ${conciliar.isPending ? 'animate-spin' : ''}`} />
+            {conciliar.isPending ? 'Conferindo...' : 'Conferir pagamentos'}
+          </Button>
+        )}
         <Button
           variant="outline"
           onClick={abrirLote}
@@ -324,7 +523,8 @@ export default function PainelCobrancas() {
                       <th className="text-left p-3 font-semibold text-gray-600">Vencimento</th>
                       <th className="text-right p-3 font-semibold text-gray-600">Valor</th>
                       <th className="text-left p-3 font-semibold text-gray-600">Situação</th>
-                      <th className="w-28" />
+                      <th className="text-left p-3 font-semibold text-gray-600">Aviso</th>
+                      <th className="w-44" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -336,16 +536,60 @@ export default function PainelCobrancas() {
                           <td className="p-3 text-gray-600">{c.competencia}</td>
                           <td className="p-3 text-gray-600">{fmtData(c.vencimento)}</td>
                           <td className="p-3 text-right tabular-nums font-medium">{fmtBRL(c.valor)}</td>
-                          <td className="p-3"><Badge className={`border-0 ${s.cls}`}>{s.label}</Badge></td>
+                          <td className="p-3">
+                          <Badge className={`border-0 ${s.cls}`}>{s.label}</Badge>
+                          {/* Emitida na Asaas: o cliente já tem boleto/Pix na mão. */}
+                          {c.asaas_id && (
+                            <span className="block text-[11px] text-blue-600 mt-1">boleto emitido</span>
+                          )}
+                        </td>
+                          <td className="p-3">{avisoDaCobranca(c)}</td>
                           <td className="p-3 text-right">
                             {c.status !== 'pago' && c.status !== 'cancelado' && (
-                              <Button
-                                size="sm" variant="outline"
-                                onClick={() => { setBaixa(c); setPagamento({ data_pagamento: hoje(), forma: 'pix' }); setErrBaixa({}); }}
-                                className="gap-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
-                              >
-                                <Check className="w-3.5 h-3.5" /> Dar baixa
-                              </Button>
+                              <div className="flex items-center justify-end gap-1">
+                                {/* Asaas: emitir enquanto não emitida; depois, ver boleto/Pix. */}
+                                {asaasLigada && !c.asaas_id && (
+                                  <Button
+                                    size="sm" variant="outline"
+                                    onClick={() => emitir.mutate(c.id)}
+                                    disabled={emitindoId === c.id}
+                                    className="gap-1 border-gray-300 text-gray-700"
+                                    title="Emitir boleto/Pix na Asaas"
+                                  >
+                                    <FileText className="w-3.5 h-3.5" />
+                                    {emitindoId === c.id ? 'Emitindo' : 'Emitir'}
+                                  </Button>
+                                )}
+                                {asaasLigada && c.asaas_id && (
+                                  <Button
+                                    size="sm" variant="outline"
+                                    onClick={() => verMeios(c)}
+                                    className="gap-1 border-blue-300 text-blue-700"
+                                    title="Ver boleto e Pix para enviar ao cliente"
+                                  >
+                                    <FileText className="w-3.5 h-3.5" /> Boleto/Pix
+                                  </Button>
+                                )}
+                                {podeAvisar(c) && (
+                                  <Button
+                                    size="sm" variant="outline"
+                                    onClick={() => avisar.mutate(c.id)}
+                                    disabled={avisandoId === c.id}
+                                    className="gap-1 border-gray-300 text-gray-700"
+                                    title="Enviar aviso de vencimento agora"
+                                  >
+                                    <Mail className="w-3.5 h-3.5" />
+                                    {avisandoId === c.id ? 'Enviando' : 'Avisar'}
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm" variant="outline"
+                                  onClick={() => { setBaixa(c); setPagamento({ data_pagamento: hoje(), forma: 'pix' }); setErrBaixa({}); }}
+                                  className="gap-1 text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                >
+                                  <Check className="w-3.5 h-3.5" /> Dar baixa
+                                </Button>
+                              </div>
                             )}
                             {c.status === 'pago' && (
                               <span className="text-xs text-gray-400">{fmtData(c.data_pagamento)}</span>
@@ -371,14 +615,42 @@ export default function PainelCobrancas() {
                         <span>{c.competencia} · vence {fmtData(c.vencimento)}</span>
                         <span className="font-semibold text-gray-900 tabular-nums">{fmtBRL(c.valor)}</span>
                       </div>
+                      <div className="text-xs">{avisoDaCobranca(c)}</div>
                       {c.status !== 'pago' && c.status !== 'cancelado' && (
-                        <Button
-                          size="sm" variant="outline"
-                          onClick={() => { setBaixa(c); setPagamento({ data_pagamento: hoje(), forma: 'pix' }); setErrBaixa({}); }}
-                          className="w-full gap-1 text-emerald-700 border-emerald-300"
-                        >
-                          <Check className="w-3.5 h-3.5" /> Dar baixa
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                          {asaasLigada && !c.asaas_id && (
+                            <Button
+                              size="sm" variant="outline"
+                              onClick={() => emitir.mutate(c.id)}
+                              disabled={emitindoId === c.id}
+                              className="gap-1 border-gray-300 text-gray-700"
+                            >
+                              <FileText className="w-3.5 h-3.5" /> Emitir
+                            </Button>
+                          )}
+                          {asaasLigada && c.asaas_id && (
+                            <Button size="sm" variant="outline" onClick={() => verMeios(c)} className="gap-1 border-blue-300 text-blue-700">
+                              <FileText className="w-3.5 h-3.5" /> Boleto/Pix
+                            </Button>
+                          )}
+                          {podeAvisar(c) && (
+                            <Button
+                              size="sm" variant="outline"
+                              onClick={() => avisar.mutate(c.id)}
+                              disabled={avisandoId === c.id}
+                              className="gap-1 border-gray-300 text-gray-700"
+                            >
+                              <Mail className="w-3.5 h-3.5" /> Avisar
+                            </Button>
+                          )}
+                          <Button
+                            size="sm" variant="outline"
+                            onClick={() => { setBaixa(c); setPagamento({ data_pagamento: hoje(), forma: 'pix' }); setErrBaixa({}); }}
+                            className="flex-1 gap-1 text-emerald-700 border-emerald-300"
+                          >
+                            <Check className="w-3.5 h-3.5" /> Dar baixa
+                          </Button>
+                        </div>
                       )}
                     </div>
                   );
@@ -395,6 +667,89 @@ export default function PainelCobrancas() {
       </Card>
 
       {/* Nova cobrança */}
+      {/* BOLETO E PIX — o que se manda ao cliente.
+          Copiar em vez de só exibir: linha digitável e código Pix são feitos
+          para colar, e ninguém digita 48 dígitos a partir da tela. */}
+      <Dialog open={!!meios} onOpenChange={(o) => { if (!o) setMeios(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Boleto e Pix</DialogTitle>
+          </DialogHeader>
+
+          {meios && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-500">
+                {meios.cobranca.cliente_nome} · {fmtBRL(meios.cobranca.valor)} ·
+                vence {fmtData(meios.cobranca.vencimento)}
+              </p>
+
+              {meios.url_fatura && (
+                <a
+                  href={meios.url_fatura} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 px-4 py-3 hover:bg-gray-50"
+                >
+                  <span className="text-sm text-gray-900">Abrir a fatura no site da Asaas</span>
+                  <ExternalLink className="w-4 h-4 text-gray-400 shrink-0" />
+                </a>
+              )}
+
+              {meios.linha_digitavel && (
+                <div>
+                  <Label className="text-xs text-gray-600">Linha digitável do boleto</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input readOnly value={meios.linha_digitavel} className="h-11 font-mono text-xs" />
+                    <Button
+                      variant="outline"
+                      onClick={() => { navigator.clipboard.writeText(meios.linha_digitavel); toast.success('Linha digitável copiada.'); }}
+                      className="shrink-0 border-gray-300"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {meios.pix_copia_e_cola && (
+                <div>
+                  <Label className="text-xs text-gray-600">Pix copia e cola</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input readOnly value={meios.pix_copia_e_cola} className="h-11 font-mono text-xs" />
+                    <Button
+                      variant="outline"
+                      onClick={() => { navigator.clipboard.writeText(meios.pix_copia_e_cola); toast.success('Código Pix copiado.'); }}
+                      className="shrink-0 border-gray-300"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {meios.pix_qrcode && (
+                <div className="text-center">
+                  <img
+                    src={`data:image/png;base64,${meios.pix_qrcode}`}
+                    alt="QR Code do Pix"
+                    className="mx-auto w-44 h-44 rounded-lg border border-gray-200"
+                  />
+                </div>
+              )}
+
+              {!meios.url_fatura && !meios.linha_digitavel && !meios.pix_copia_e_cola && (
+                <p className="text-sm text-amber-700">
+                  A Asaas ainda não devolveu os meios de pagamento desta cobrança.
+                  Boleto costuma levar alguns instantes após a emissão.
+                </p>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMeios(null)} className="border-gray-300 text-gray-700">Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* GERAÇÃO EM LOTE — conferência antes de gravar.
           Lançar mensalidade é criar dívida no nome do cliente: quem confirma
           precisa ver quem entra, quanto, e por que alguém ficou de fora. */}

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { store } from './entityStore.js';
 import { limitePorIP } from './rateLimit.js';
+import { logCliente } from './logger.js';
 
 // API DE INTEGRAÇÃO — o canal entre as instalações dos clientes e este painel.
 //
@@ -16,6 +17,24 @@ import { limitePorIP } from './rateLimit.js';
 // caiu seria péssimo — o bloqueio existe para inadimplência, não para falha nossa.
 
 const router = Router();
+
+// REGISTRO DO HEARTBEAT — dois destinos, com propósitos diferentes.
+//
+// 1) ARQUIVO clientes-logs.log: TODO heartbeat, cru. É o log de auditoria para
+//    quando algo der errado e você precisar saber o que chegou. Arquivo único,
+//    cortado em 10 MB (logger.js) — nunca numerado.
+//
+// 2) BANCO (LogIntegracao): TODO heartbeat também, porque é o que a tela de
+//    Relatórios mostra — e ali o dono do painel quer ver o batimento real, de 30
+//    em 30 segundos, não uma amostra. O crescimento da tabela é contido pela
+//    poda por idade no agendador (LOG_INTEGRACAO_DIAS, 90 por padrão).
+//
+// Cheguei a amostrar isto em 5 min para conter a tabela; ficou parecendo que o
+// heartbeat tinha diminuído — o relatório é a única janela para esse batimento,
+// então rarear a linha é o mesmo que esconder o fato. Se algum dia a tabela
+// incomodar, LOG_INTEGRACAO_AMOSTRA_MIN volta a ativar a amostragem; 0 = grava
+// tudo (padrão).
+const MINUTOS_AMOSTRA = Math.max(0, Number(process.env.LOG_INTEGRACAO_AMOSTRA_MIN || 0));
 
 // Tolerância antes de cortar por atraso. Dá tempo de o boleto compensar e de
 // alguém ligar para o cliente antes de derrubar o sistema dele.
@@ -137,19 +156,47 @@ router.post(
       const decisao = await avaliarAutorizacao(instancia, cliente);
       const agora = new Date().toISOString();
 
+      // Log cru: todo heartbeat, sempre, no arquivo.
+      logCliente({
+        tipo: 'heartbeat',
+        instancia: instancia?.nome || url || null,
+        cliente: cliente?.nome || chave.cliente_nome || null,
+        autorizado: decisao.autorizado,
+        motivo: decisao.motivo,
+        usuarios_online: Number(corpo.usuarios_online) || 0,
+        usuarios_total: Number(corpo.usuarios_total) || 0,
+        obras_ativas: Number(corpo.obras_ativas) || 0,
+        versao: corpo.versao || null,
+      });
+
       // Guarda o retrato mais recente da instalação.
       if (instancia?.id) {
+        // Mudou de estado? Isso nunca pode ficar só no arquivo.
+        const mudouEstado = instancia.status !== 'online'
+          || instancia.autorizado !== decisao.autorizado
+          || instancia.motivo_ultima_decisao !== decisao.motivo;
+
+        // Passou o intervalo da amostra desde o último registro no banco?
+        const ultimoNoBanco = instancia.ultimo_log_em ? new Date(instancia.ultimo_log_em).getTime() : 0;
+        const naHoraDaAmostra = MINUTOS_AMOSTRA === 0
+          || (Date.now() - ultimoNoBanco) >= MINUTOS_AMOSTRA * 60_000;
+
+        const gravarNoBanco = mudouEstado || naHoraDaAmostra;
+
         await store.update('InstanciaCliente', instancia.id, {
           status: 'online',
           versao: corpo.versao || instancia.versao || null,
           ultimo_heartbeat: agora,
           ultimo_teste: agora,
           ultimo_erro: null,
+          ...(gravarNoBanco ? { ultimo_log_em: agora } : {}),
           metricas: {
             usuarios_online: Number(corpo.usuarios_online) || 0,
             usuarios_total: Number(corpo.usuarios_total) || 0,
             obras_ativas: Number(corpo.obras_ativas) || 0,
             obras_total: Number(corpo.obras_total) || 0,
+            // Valor sob gestão (soma dos contratos das obras da instalação).
+            valor_obras: Number(corpo.valor_obras) || 0,
             atualizado_em: agora,
           },
           autorizado: decisao.autorizado,
@@ -158,19 +205,24 @@ router.post(
 
         await store.update('ChaveApi', chave.id, { ultimo_uso: agora });
 
-        await store.create('LogIntegracao', {
-          instancia_id: instancia.id,
-          instancia_nome: instancia.nome || url,
-          cliente_id: cliente?.id || null,
-          cliente_nome: cliente?.nome || null,
-          tipo: 'heartbeat',
-          status: 'online',
-          autorizado: decisao.autorizado,
-          motivo: decisao.motivo,
-          usuarios_online: Number(corpo.usuarios_online) || 0,
-          obras_ativas: Number(corpo.obras_ativas) || 0,
-          testado_em: agora,
-        });
+        if (gravarNoBanco) {
+          await store.create('LogIntegracao', {
+            instancia_id: instancia.id,
+            instancia_nome: instancia.nome || url,
+            cliente_id: cliente?.id || null,
+            cliente_nome: cliente?.nome || null,
+            tipo: 'heartbeat',
+            status: 'online',
+            autorizado: decisao.autorizado,
+            motivo: decisao.motivo,
+            // Marca a linha que entrou por mudança de estado: no relatório é o
+            // que interessa olhar primeiro.
+            mudanca_de_estado: mudouEstado || undefined,
+            usuarios_online: Number(corpo.usuarios_online) || 0,
+            obras_ativas: Number(corpo.obras_ativas) || 0,
+            testado_em: agora,
+          });
+        }
       }
 
       return res.json({

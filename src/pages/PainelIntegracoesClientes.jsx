@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ComboboxBusca from '@/components/shared/ComboboxBusca';
 import { TableSkeleton } from '@/components/shared/Skeletons';
+import Pagination from '@/components/shared/Pagination';
+import { usePagination } from '@/components/shared/usePagination';
 import { Textarea } from '@/components/ui/textarea';
 import { Activity, Plus, RefreshCw, Pencil, ExternalLink, Server, Lock, Unlock, Users, HardHat } from 'lucide-react';
 import { toast } from 'sonner';
@@ -147,13 +149,30 @@ export default function PainelIntegracoesClientes() {
     });
   };
 
+  // O `status` gravado pode estar velho: entre a queda e a próxima varredura do
+  // monitor, o banco ainda diz "online". Aqui a tela decide pela IDADE do último
+  // sinal, que é a verdade disponível na hora — assim ela nunca mostra verde
+  // para quem parou de reportar há dez minutos.
+  const MIN_SILENCIO = 5;
+  const minutosSemSinal = (i) => {
+    const t = new Date(i.ultimo_heartbeat || i.ultimo_teste || 0).getTime();
+    return t ? (Date.now() - t) / 60000 : Infinity;
+  };
+  const estadoReal = (i) => {
+    if (!i.ultimo_heartbeat && !i.ultimo_teste) return 'nao_testado';
+    if (minutosSemSinal(i) > MIN_SILENCIO) return 'offline';
+    return i.status === 'instavel' ? 'instavel' : 'online';
+  };
+
   const totais = useMemo(() => ({
     total: instancias.length,
-    online: instancias.filter((i) => i.status === 'online').length,
-    problema: instancias.filter((i) => i.status === 'offline' || i.status === 'instavel').length,
+    online: instancias.filter((i) => estadoReal(i) === 'online').length,
+    problema: instancias.filter((i) => ['offline', 'instavel'].includes(estadoReal(i))).length,
     semTeste: instancias.filter((i) => !i.ultimo_teste).length,
     bloqueadas: instancias.filter((i) => i.bloqueado === true).length,
   }), [instancias]);
+
+  const pag = usePagination(instancias, 10);
 
   return (
     <div className="space-y-6 pb-6">
@@ -201,8 +220,8 @@ export default function PainelIntegracoesClientes() {
                   { titulo: '', largura: 'w-52' },
                 ]} />
                 <tbody className="divide-y divide-gray-100">
-                  {instancias.map((i) => {
-                    const s = STATUS[i.status] || STATUS.nao_testado;
+                  {pag.paginatedItems.map((i) => {
+                    const s = STATUS[estadoReal(i)] || STATUS.nao_testado;
                     return (
                       <tr key={i.id} className="hover:bg-gray-50">
                         <td className="p-3">
@@ -295,8 +314,8 @@ export default function PainelIntegracoesClientes() {
             </div>
 
             <div className="md:hidden divide-y divide-gray-100">
-              {instancias.map((i) => {
-                const s = STATUS[i.status] || STATUS.nao_testado;
+              {pag.paginatedItems.map((i) => {
+                const s = STATUS[estadoReal(i)] || STATUS.nao_testado;
                 return (
                   <div key={i.id} className="p-4 space-y-2">
                     <div className="flex items-start justify-between gap-2">
@@ -342,6 +361,11 @@ export default function PainelIntegracoesClientes() {
                 );
               })}
             </div>
+
+            <Pagination
+              currentPage={pag.currentPage} totalPages={pag.totalPages} onPageChange={pag.goToPage}
+              startIndex={pag.startIndex} endIndex={pag.endIndex} totalItems={pag.totalItems}
+            />
           </>
         )}
       </Painel>

@@ -151,12 +151,36 @@ export default function LandingPage() {
     return () => obs.disconnect();
   }, [stats]);
 
+  // Escala do valor: 75.679.124 vira "75,7 mi". Número cheio numa vitrine é
+  // difícil de ler e quebra o layout no celular.
+  //
+  // Vai até trilhão de propósito: parando em "mi", R$ 6,9 bilhões apareceria como
+  // "R$ 6.948,3 mi" — com o separador de milhar brigando com a vírgula decimal,
+  // ninguém lê aquilo direito.
   const escala = (final) => {
     const f = Number(final) || 0;
-    if (f >= 1_000_000) return { div: 1_000_000, sufixo: 'mi', casas: 1 };
-    if (f >= 1_000) return { div: 1_000, sufixo: 'mil', casas: 0 };
-    return { div: 1, sufixo: '', casas: 0 };
+    const niveis = [
+      { div: 1e12, sufixo: 'tri', casas: 1 },
+      { div: 1e9, sufixo: 'bi', casas: 1 },
+      { div: 1e6, sufixo: 'mi', casas: 1 },
+      { div: 1e3, sufixo: 'mil', casas: 0 },
+      { div: 1, sufixo: '', casas: 0 },
+    ];
+    for (let i = 0; i < niveis.length; i++) {
+      const n = niveis[i];
+      if (f / n.div < 1) continue;
+      // O arredondamento pode empurrar para o nível de cima: 999.999.999 com uma
+      // casa daria "1.000,0 mi" em vez de "1,0 bi".
+      if (Number((f / n.div).toFixed(n.casas)) >= 1000 && i > 0) return niveis[i - 1];
+      return n;
+    }
+    return niveis[niveis.length - 1];
   };
+
+  // A seção de números só aparece quando há número: instalação nova mostraria
+  // "+0 obras, +0 usuários" numa página de venda, o que é pior do que não
+  // mostrar nada. Some sozinha e volta sozinha quando as instalações reportam.
+  const temNumeros = !!stats && (stats.obras > 0 || stats.usuarios > 0 || stats.valorObras > 0);
 
 
 
@@ -211,7 +235,7 @@ export default function LandingPage() {
       </section>
 
       {/* ───────────────────────── Números ───────────────────────── */}
-      {stats && (
+      {temNumeros && (
         <section className="border-t border-gray-100 bg-[#fbfbfd]">
           <div className="max-w-5xl mx-auto px-6 py-14 sm:py-20" ref={numerosRef}>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-10 sm:gap-6 text-center">
@@ -221,12 +245,27 @@ export default function LandingPage() {
                 </p>
                 <p className="mt-2 text-sm text-gray-500">Obras gerenciadas na plataforma</p>
               </div>
+              {/* Antes este cartão mostrava "R$ em contratos administrados", somando
+                  orçamentos de obra. O painel não tem esse dado: o heartbeat das
+                  instalações reporta obras e usuários, não valor de contrato — e
+                  puxar dinheiro do cliente para a nossa vitrine é decisão dele.
+                  Trocado por usuários, que é real e mede o mesmo: uso. */}
+              <div>
+                <p className="text-4xl sm:text-5xl font-semibold tracking-tight tabular-nums">
+                  <NumeroAnimado valor={stats.usuarios} ativo={numerosInView} formato={(x) => `+${Math.round(x)}`} />
+                </p>
+                <p className="mt-2 text-sm text-gray-500">Pessoas usando o sistema</p>
+              </div>
+              {/* Valor sob gestão — soma dos contratos das obras de todas as
+                  instalações. Escalado para mi/mil: "R$ 75,7 mi" comunica melhor
+                  que 75.679.124, e a página não fica com um número que estoura
+                  a largura no celular. */}
               <div>
                 {(() => {
                   const e = escala(stats.valorObras);
                   return (
                     <p className="text-4xl sm:text-5xl font-semibold tracking-tight tabular-nums whitespace-nowrap">
-                      <span className="mr-1 align-baseline text-xl sm:text-2xl text-gray-400">+R$</span>
+                      <span className="mr-1 align-baseline text-xl sm:text-2xl text-gray-400">R$</span>
                       <NumeroAnimado
                         valor={stats.valorObras / e.div}
                         ativo={numerosInView}
@@ -236,13 +275,7 @@ export default function LandingPage() {
                     </p>
                   );
                 })()}
-                <p className="mt-2 text-sm text-gray-500">Em contratos administrados</p>
-              </div>
-              <div>
-                <p className="text-4xl sm:text-5xl font-semibold tracking-tight tabular-nums">
-                  <NumeroAnimado valor={stats.clientes} ativo={numerosInView} formato={(x) => `+${Math.round(x)}`} />
-                </p>
-                <p className="mt-2 text-sm text-gray-500">Clientes acompanhados</p>
+                <p className="mt-2 text-sm text-gray-500">Em obras sob gestão</p>
               </div>
             </div>
           </div>

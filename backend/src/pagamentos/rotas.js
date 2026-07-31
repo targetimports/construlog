@@ -17,6 +17,7 @@ import {
   modoPagamento, configAsaas, emitirCobranca, cancelarCobranca,
   meiosDePagamento, processarWebhook, conciliarPendentes,
 } from './index.js';
+import { enviarAvisoManual } from '../cobrancaAviso.js';
 
 // --- Público (webhook) ----------------------------------------------------
 
@@ -58,7 +59,12 @@ export const pagamentosRouter = Router();
 // Emitir e cancelar cobrança mexe em dinheiro do cliente: exige sessão.
 pagamentosRouter.use(requireAuth);
 
-pagamentosRouter.get('/status', (_req, res) => {
+pagamentosRouter.get('/status', async (_req, res) => {
+  // Garante o cache carregado antes de responder: é esta rota que a tela usa
+  // para decidir se mostra os botões de boleto/Pix. Responder "manual" por
+  // cache frio esconderia recursos que estão configurados.
+  const { carregarAsaas } = await import('./asaas.js');
+  await carregarAsaas().catch(() => {});
   const { ambiente } = configAsaas();
   res.json({ modo: modoPagamento(), ambiente });
 });
@@ -78,6 +84,15 @@ pagamentosRouter.get('/cobrancas/:id/meios', async (req, res, next) => {
 pagamentosRouter.post('/cobrancas/:id/cancelar', async (req, res, next) => {
   try {
     res.json(await cancelarCobranca(req.params.id));
+  } catch (e) { next(e); }
+});
+
+// Aviso de vencimento por e-mail — disparo manual, do botão do painel.
+pagamentosRouter.post('/cobrancas/:id/avisar', async (req, res, next) => {
+  try {
+    // `canais` opcional: ["email"], ["whatsapp"] ou ambos. Sem ele, vai por
+    // todos os que o cliente aceitou.
+    res.json(await enviarAvisoManual(req.params.id, { canais: req.body?.canais }));
   } catch (e) { next(e); }
 });
 

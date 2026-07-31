@@ -20,14 +20,39 @@ const BASES = {
 
 const TIMEOUT_MS = 20_000;
 
-export const configAsaas = () => ({
+// A configuração vem da tela Sistema › Integrações externas (com o .env vencendo,
+// quando definido lá). Fica em cache porque é lida a cada chamada da API e ir ao
+// banco toda vez seria desperdício; `recarregarAsaas()` derruba o cache quando a
+// tela salva algo, para a mudança valer na hora e não no próximo restart.
+let cache = null;
+
+export async function carregarAsaas() {
+  const { configDe } = await import('../integracoesExternas.js');
+  const cfg = await configDe('asaas');
+  cache = {
+    chave: cfg?.valores?.api_key || '',
+    ambiente: cfg?.valores?.ambiente === 'producao' ? 'producao' : 'sandbox',
+    webhookToken: cfg?.valores?.webhook_token || '',
+    ativo: !!cfg?.ativo,
+  };
+  return cache;
+}
+
+export const recarregarAsaas = () => { cache = null; };
+
+/** Leitura síncrona do cache — usada nos caminhos que não podem esperar I/O. */
+export const configAsaas = () => cache || {
   chave: process.env.ASAAS_API_KEY || '',
   ambiente: process.env.ASAAS_AMBIENTE === 'producao' ? 'producao' : 'sandbox',
   webhookToken: process.env.ASAAS_WEBHOOK_TOKEN || '',
-});
+  ativo: true,
+};
 
-/** Está configurada? Sem isso, o sistema opera no modo manual de hoje. */
-export const asaasAtiva = () => !!configAsaas().chave;
+/** Está configurada e ligada? Sem isso, o sistema opera no modo manual de hoje. */
+export const asaasAtiva = () => {
+  const c = configAsaas();
+  return !!c.chave && c.ativo !== false;
+};
 
 /**
  * Chamada crua à API. Devolve o corpo já em objeto e levanta erro com a
@@ -35,8 +60,8 @@ export const asaasAtiva = () => !!configAsaas().chave;
  * perder isso transformaria "CPF inválido" num genérico "falhou".
  */
 async function chamar(metodo, caminho, corpo) {
-  const { chave, ambiente } = configAsaas();
-  if (!chave) throw new Error('Asaas não configurada (ASAAS_API_KEY ausente).');
+  const { chave, ambiente } = cache || await carregarAsaas();
+  if (!chave) throw new Error('Asaas não configurada — configure em Sistema › Integrações externas.');
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);

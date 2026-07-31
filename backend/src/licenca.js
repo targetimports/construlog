@@ -54,10 +54,15 @@ async function coletarMetricas() {
     }
   };
 
-  const [usuarios_total, obras_total, obras_ativas, usuarios_online] = await Promise.all([
+  const [usuarios_total, obras_total, obras_ativas, valor_obras, usuarios_online] = await Promise.all([
     num(`SELECT count(*) AS n FROM auth_users`),
     num(`SELECT count(*) AS n FROM entity_obra`),
     num(`SELECT count(*) AS n FROM entity_obra WHERE data->>'status' IN ('em_andamento','ativa')`),
+    // Valor sob gestão: soma dos contratos das obras. `valor_contrato` é o campo
+    // canônico (total_orcamento é o orçado, que oscila com revisão). Vai para os
+    // números públicos da plataforma — nenhum dado por obra ou por cliente sai
+    // daqui, só o total somado.
+    num(`SELECT COALESCE(SUM(COALESCE(NULLIF(data->>'valor_contrato','')::numeric, 0)), 0) AS n FROM entity_obra`),
     // "Online" = sessão vista nos últimos 15 min. auth_users não tem coluna de
     // último acesso; o dado vem do JSONB, gravado no login. Se ainda não existir,
     // o count dá 0 — o painel mostra "0 online" em vez de quebrar o heartbeat.
@@ -66,7 +71,7 @@ async function coletarMetricas() {
             AND (data->>'ultimo_acesso')::timestamptz > NOW() - INTERVAL '15 minutes'`),
   ]);
 
-  return { usuarios_total, obras_total, obras_ativas, usuarios_online };
+  return { usuarios_total, obras_total, obras_ativas, valor_obras, usuarios_online };
 }
 
 async function baterHeartbeat() {

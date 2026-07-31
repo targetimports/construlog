@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ComboboxBusca from '@/components/shared/ComboboxBusca';
 import { TableSkeleton } from '@/components/shared/Skeletons';
+import Pagination from '@/components/shared/Pagination';
+import { usePagination } from '@/components/shared/usePagination';
 import { Plug, Plus, Copy, Ban, Check, KeyRound, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { confirmar } from '@/lib/confirmar';
@@ -125,6 +127,8 @@ export default function PainelApi() {
     semUso: chaves.filter((c) => c.status === 'ativa' && !c.ultimo_uso).length,
   }), [chaves]);
 
+  const pag = usePagination(chaves, 15);
+
   return (
     <div className="space-y-6 pb-6">
       <CabecalhoPagina subtitulo="Chaves de acesso usadas pelas instalações dos clientes">
@@ -161,7 +165,7 @@ export default function PainelApi() {
                   { titulo: '', largura: 'w-28' },
                 ]} />
                 <tbody className="divide-y divide-gray-100">
-                  {chaves.map((c) => (
+                  {pag.paginatedItems.map((c) => (
                     <tr key={c.id} className="hover:bg-gray-50">
                       <td className="p-3">
                         <p className="font-medium text-gray-900">{c.nome}</p>
@@ -196,7 +200,7 @@ export default function PainelApi() {
             </div>
 
             <div className="md:hidden divide-y divide-gray-100">
-              {chaves.map((c) => (
+              {pag.paginatedItems.map((c) => (
                 <div key={c.id} className="p-4 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -216,6 +220,11 @@ export default function PainelApi() {
                 </div>
               ))}
             </div>
+
+            <Pagination
+              currentPage={pag.currentPage} totalPages={pag.totalPages} onPageChange={pag.goToPage}
+              startIndex={pag.startIndex} endIndex={pag.endIndex} totalItems={pag.totalItems}
+            />
           </>
         )}
       </Painel>

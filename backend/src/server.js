@@ -9,6 +9,8 @@ import integracaoRouter from './integracao.js';
 import { iniciarLicenca, exigirLicenca, statusLicenca } from './licenca.js';
 import { webhookRouter, pagamentosRouter } from './pagamentos/rotas.js';
 import instalacaoRouter from './instalacao.js';
+import integracoesExternasRouter from './integracoesExternas.js';
+import interessadosRouter from './interessados.js';
 import { errorHandler } from './middleware.js';
 import { limitePorIP } from './rateLimit.js';
 import { logEvent } from './logger.js';
@@ -105,6 +107,8 @@ app.use(exigirLicenca);
 
 app.use('/entities', entitiesRouter);
 app.use('/pagamentos', pagamentosRouter);
+app.use('/integracoes-externas', integracoesExternasRouter);
+app.use('/interessados', interessadosRouter);
 app.use('/integrations', integrationsRouter);
 app.use('/functions', functionsRouter);
 app.use('/files', filesRouter);
@@ -127,6 +131,21 @@ const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => console.log(`[server] construlog API on :${PORT}`));
     startScheduler();
     iniciarLicenca();
+    // Carrega a config das integrações externas (Asaas) para o cache em memória.
+    // Falha aqui não pode impedir o servidor de subir — sem config, o painel
+    // apenas segue no modo manual.
+    import('./pagamentos/asaas.js')
+      .then((m) => m.carregarAsaas())
+      .then((c) => console.log(`[integracoes] Asaas: ${c.chave ? `configurada (${c.ambiente})` : 'não configurada'}`))
+      .catch(() => {});
+    import('./email.js')
+      .then((m) => m.carregarEmail().then(() => m.emailConfigured()))
+      .then((ok) => console.log(`[integracoes] E-mail: ${ok ? 'configurado' : 'não configurado'}`))
+      .catch(() => {});
+    import('./whatsapp.js')
+      .then((m) => m.carregarWhatsapp().then(() => m.whatsappConfigured()))
+      .then((ok) => console.log(`[integracoes] WhatsApp: ${ok ? 'configurado' : 'não configurado'}`))
+      .catch(() => {});
   } catch (err) {
     console.error('[server] startup failed:', err);
     await pool.end();

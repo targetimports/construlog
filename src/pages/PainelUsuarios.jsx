@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TableSkeleton } from '@/components/shared/Skeletons';
+import Pagination from '@/components/shared/Pagination';
+import { usePagination } from '@/components/shared/usePagination';
 import { Users, Plus, Pencil, KeyRound, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
@@ -125,6 +127,8 @@ export default function PainelUsuarios() {
     admins: usuarios.filter((u) => u.role === 'admin').length,
   }), [usuarios]);
 
+  const pag = usePagination(usuarios, 15);
+
   return (
     <div className="space-y-6 pb-6">
       <CabecalhoPagina subtitulo="Quem acessa este painel">
@@ -154,7 +158,7 @@ export default function PainelUsuarios() {
                   { titulo: 'Situação' }, { titulo: 'Criado em' }, { titulo: '', largura: 'w-14' },
                 ]} />
                 <tbody className="divide-y divide-gray-100">
-                  {usuarios.map((u) => (
+                  {pag.paginatedItems.map((u) => (
                     <tr key={u.id} className="hover:bg-gray-50">
                       <td className="p-3">
                         <span className="font-medium text-gray-900">{u.full_name || '—'}</span>
@@ -180,7 +184,7 @@ export default function PainelUsuarios() {
             </div>
 
             <div className="md:hidden divide-y divide-gray-100">
-              {usuarios.map((u) => (
+              {pag.paginatedItems.map((u) => (
                 <div key={u.id} className="p-4 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -198,6 +202,11 @@ export default function PainelUsuarios() {
                 </div>
               ))}
             </div>
+
+            <Pagination
+              currentPage={pag.currentPage} totalPages={pag.totalPages} onPageChange={pag.goToPage}
+              startIndex={pag.startIndex} endIndex={pag.endIndex} totalItems={pag.totalItems}
+            />
           </>
         )}
       </Painel>
